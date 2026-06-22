@@ -1,0 +1,12 @@
+{
+  "name": "@helm/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Casper treasury-vault contract for Helm (Odra). Driven via cargo-odra.",
+  "scripts": {
+    "build": "cargo odra build",
+    "test": "cargo odra test",
+    "schema": "cargo odra schema",
+    "deploy:testnet": "bash scripts/deploy_testnet.sh"
+  }
+}

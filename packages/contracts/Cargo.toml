@@ -1,0 +1,21 @@
+[package]
+name = "helm-contracts"
+version = "0.1.0"
+edition = "2021"
+authors = ["Helm"]
+description = "Casper treasury-vault contract for Helm, built with Odra."
+license = "MIT"
+
+[dependencies]
+odra = { version = "2.1.0", default-features = false }
+
+[dev-dependencies]
+odra-test = { version = "2.1.0" }
+
+[lib]
+crate-type = ["rlib"]
+doctest = false
+
+[profile.release]
+codegen-units = 1
+lto = true

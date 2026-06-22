@@ -1,0 +1,26 @@
+{
+  "name": "helm",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Helm — a policy-driven AI treasury control plane for tokenized real-world assets on Casper.",
+  "packageManager": "pnpm@9.7.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
+    "contracts:build": "pnpm --filter @helm/contracts build",
+    "contracts:test": "pnpm --filter @helm/contracts test"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^2.0.9",
+    "typescript": "^5.5.4"
+  }
+}
