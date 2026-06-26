@@ -7,7 +7,7 @@ import type {
 
 /**
  * Append-only audit store. The audit trail is what makes Helm's decisions
- * explainable and reviewable. Back this with Postgres/SQLite or an object store.
+ * explainable and reviewable. Back with Postgres/SQLite for production.
  */
 export interface AuditStore {
   saveSnapshot(snapshot: SignalSnapshot): Promise<void>;
@@ -15,24 +15,32 @@ export interface AuditStore {
   saveTransaction(tx: TransactionRecord): Promise<void>;
   saveRun(run: AgentRunLog): Promise<void>;
   listRuns(): Promise<AgentRunLog[]>;
+  getRun(id: string): Promise<AgentRunLog | undefined>;
 }
 
-/** Scaffold in-memory implementation. TODO: persist to a real store. */
+/** In-memory implementation. Keyed by id; `listRuns` returns newest-first. */
 export class InMemoryAuditStore implements AuditStore {
-  async saveSnapshot(_snapshot: SignalSnapshot): Promise<void> {
-    // TODO
+  private snapshots = new Map<string, SignalSnapshot>();
+  private recommendations = new Map<string, Recommendation>();
+  private transactions = new Map<string, TransactionRecord>();
+  private runs = new Map<string, AgentRunLog>();
+
+  async saveSnapshot(snapshot: SignalSnapshot): Promise<void> {
+    this.snapshots.set(snapshot.id, snapshot);
   }
-  async saveRecommendation(_rec: Recommendation): Promise<void> {
-    // TODO
+  async saveRecommendation(rec: Recommendation): Promise<void> {
+    this.recommendations.set(rec.id, rec);
   }
-  async saveTransaction(_tx: TransactionRecord): Promise<void> {
-    // TODO
+  async saveTransaction(tx: TransactionRecord): Promise<void> {
+    this.transactions.set(tx.id, tx);
   }
-  async saveRun(_run: AgentRunLog): Promise<void> {
-    // TODO
+  async saveRun(run: AgentRunLog): Promise<void> {
+    this.runs.set(run.id, { ...run });
   }
   async listRuns(): Promise<AgentRunLog[]> {
-    // TODO
-    return [];
+    return [...this.runs.values()].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  }
+  async getRun(id: string): Promise<AgentRunLog | undefined> {
+    return this.runs.get(id);
   }
 }

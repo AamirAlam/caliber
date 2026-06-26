@@ -1,29 +1,48 @@
-import type { TreasuryPolicy } from '@helm/shared';
 import { config } from '../config.js';
-import type { OrchestratorDeps } from '../orchestrator.js';
+import { log } from '../logger.js';
+import { runAgentLoop, type OrchestratorDeps } from '../orchestrator.js';
 
 /**
- * Drives the agent loop on a fixed interval. Replace with a durable queue
- * (BullMQ, Temporal, cron) for production.
- * TODO: call runAgentLoop(policy, deps, seq) on each tick.
+ * Drives phase 1 of the agent loop on a fixed interval. Runs are sequential to
+ * keep audit ordering deterministic; overlapping ticks are skipped. Replace with
+ * a durable queue (BullMQ, Temporal, cron) for production.
  */
 export class Scheduler {
   private timer?: ReturnType<typeof setInterval>;
+  private seq = 0;
+  private running = false;
 
   constructor(
-    private readonly _policy: TreasuryPolicy,
-    private readonly _deps: OrchestratorDeps,
+    private readonly deps: OrchestratorDeps,
     private readonly intervalMs: number = config.loop.intervalMs,
   ) {}
 
   start(): void {
-    // TODO: invoke the agent loop on a schedule.
-    this.timer = setInterval(() => {
-      // TODO: void this.tick();
-    }, this.intervalMs);
+    log.info('scheduler started', { intervalMs: this.intervalMs, dryRun: config.loop.dryRun });
+    void this.tick();
+    this.timer = setInterval(() => void this.tick(), this.intervalMs);
   }
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
+    log.info('scheduler stopped');
+  }
+
+  /** Run one loop now (used by the scenario trigger). Returns the seq used. */
+  async runNow(): Promise<number> {
+    await this.tick();
+    return this.seq;
+  }
+
+  private async tick(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      await runAgentLoop(this.deps, ++this.seq);
+    } catch (err) {
+      log.error('agent loop failed', { seq: this.seq, err: String(err) });
+    } finally {
+      this.running = false;
+    }
   }
 }
