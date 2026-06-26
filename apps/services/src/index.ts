@@ -1,26 +1,34 @@
 import { InMemoryAuditStore } from './audit/index.js';
+import { buildServer } from './api/server.js';
+import { config } from './config.js';
 import { log } from './logger.js';
 import { defaultDeps } from './orchestrator.js';
 import { samplePolicy } from './samplePolicy.js';
 import { Scheduler } from './scheduler/index.js';
+import { AppState } from './state.js';
 
 /**
- * Entry point for the Helm off-chain agent. Boots an audit store, wires the
- * default dependencies, and starts the scheduler against the sample policy.
+ * Entry point for the Helm off-chain agent: boots app state, the audit store,
+ * the scheduler (phase-1 loop), and the HTTP API the dashboard consumes.
  */
-function main(): void {
+async function main(): Promise<void> {
+  const state = new AppState(samplePolicy);
   const audit = new InMemoryAuditStore();
-  const deps = defaultDeps(audit);
-  const scheduler = new Scheduler(samplePolicy, deps);
+  const deps = defaultDeps(audit, state);
+  const scheduler = new Scheduler(deps);
+
+  const server = buildServer(deps, scheduler);
+  await server.listen({ port: config.api.port, host: '0.0.0.0' });
+  log.info('helm api listening', { port: config.api.port });
 
   scheduler.start();
 
-  process.on('SIGINT', () => {
+  const shutdown = () => {
     scheduler.stop();
-    process.exit(0);
-  });
-
-  log.info('helm agent running', { policy: samplePolicy.id });
+    void server.close().then(() => process.exit(0));
+  };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
-main();
+void main();

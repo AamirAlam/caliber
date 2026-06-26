@@ -7,8 +7,14 @@ export const config = {
     secretKeyPath: process.env.CASPER_SECRET_KEY_PATH ?? '',
   },
   ai: {
+    /** LLM provider — model-agnostic. Currently only 'anthropic' is wired. */
+    provider: process.env.HELM_LLM_PROVIDER ?? 'anthropic',
     apiKey: process.env.ANTHROPIC_API_KEY ?? '',
     model: process.env.HELM_DECISION_MODEL ?? 'claude-opus-4-8',
+  },
+  api: {
+    port: Number(process.env.HELM_API_PORT ?? '4000'),
+    corsOrigin: process.env.HELM_CORS_ORIGIN ?? 'http://localhost:3000',
   },
   loop: {
     intervalMs: Number(process.env.HELM_LOOP_INTERVAL_MS ?? '60000'),
