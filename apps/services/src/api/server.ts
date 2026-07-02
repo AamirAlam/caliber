@@ -1,6 +1,7 @@
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { config } from '../config.js';
+import { readVaultStateCached } from '../casper/reader.js';
 import { executeApproved, type OrchestratorDeps } from '../orchestrator.js';
 import type { Scheduler } from '../scheduler/index.js';
 
@@ -42,11 +43,7 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
     return { run, recommendation: recommendation ?? null, transaction: transaction ?? null };
   });
 
-  app.get('/vault/state', async () => ({
-    paused: false,
-    rebalanceCount: 0,
-    contractHash: config.casper.vaultContractHash,
-  }));
+  app.get('/vault/state', async () => readVaultStateCached());
 
   app.post<{ Body: { active?: boolean } }>('/scenario/stress', async (req) => {
     state.scenarioStress = req.body?.active ?? true;

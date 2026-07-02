@@ -234,6 +234,35 @@ export default function DashboardPage() {
                     </ul>
                   )}
                 </div>
+
+                {/* Multi-agent deliberation */}
+                <div className="sm:col-span-2">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Agent deliberation
+                  </p>
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    <DeliberationStep
+                      role="Proposer agent"
+                      ok
+                      note={
+                        rec.agentProposed
+                          ? 'Designed the move and tested it against policy.'
+                          : 'Deterministic engine (no LLM key configured).'
+                      }
+                    />
+                    <DeliberationStep
+                      role="Risk reviewer"
+                      ok={rec.review ? rec.review.approved : true}
+                      note={
+                        rec.review
+                          ? `${rec.review.approved ? 'Approved' : 'Vetoed'} · ${rec.review.severity} — ${rec.review.concern}`
+                          : rec.action === 'rebalance'
+                            ? 'Signed off on the rebalance.'
+                            : 'No rebalance to review.'
+                      }
+                    />
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -317,6 +346,22 @@ function RiskGauge({ score, band }: { score: number; band: RiskScore['band'] }) 
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{children}</h2>;
+}
+
+function DeliberationStep({ role, ok, note }: { role: string; ok: boolean; note: string }) {
+  return (
+    <div className="flex gap-2.5 rounded-lg border border-slate-900/[0.06] bg-white p-3">
+      <span
+        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${ok ? 'bg-signal-emerald' : 'bg-signal-rose'}`}
+      >
+        {ok ? '✓' : '!'}
+      </span>
+      <div>
+        <p className="text-xs font-semibold text-ink-900">{role}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{note}</p>
+      </div>
+    </div>
+  );
 }
 
 function Row({ k, v, good }: { k: string; v: string; good?: boolean }) {

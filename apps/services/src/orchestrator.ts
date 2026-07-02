@@ -1,5 +1,6 @@
 import type { AgentRunLog, TransactionRecord } from '@helm/shared';
 import { generateRecommendation } from './agent/runner.js';
+import { readVaultStateCached } from './casper/reader.js';
 import type { AuditStore } from './audit/index.js';
 import { evaluatePolicy } from './policy/index.js';
 import { CasperExecutor } from './execution/index.js';
@@ -53,12 +54,11 @@ export async function runAgentLoop(deps: OrchestratorDeps, seq: number): Promise
   run.snapshotId = snapshot.id;
   run.riskScore = risk.score;
 
-  const { recommendation, toolTrace } = await generateRecommendation({
-    runId,
-    policy,
-    risk,
-    snapshot,
-  });
+  const vaultState = await readVaultStateCached();
+  const { recommendation, toolTrace } = await generateRecommendation(
+    { runId, policy, risk, snapshot },
+    vaultState,
+  );
   await audit.saveRecommendation(recommendation);
   state.latestRecommendation = recommendation;
   run.stage = 'generate_decision';

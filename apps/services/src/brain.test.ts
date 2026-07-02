@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { collectSignals, SimulatedSignalSource } from './signals/index.js';
 import { evaluatePolicy, scoreRisk } from './policy/index.js';
-import { decideAction } from './decision/index.js';
+import { buildRebalanceFromLegs, decideAction } from './decision/index.js';
 import { samplePolicy } from './samplePolicy.js';
 import { AppState } from './state.js';
 
@@ -51,5 +51,27 @@ describe('policy + decision', () => {
     expect(decision.rebalance?.legs[0]?.weight).toBeLessThanOrEqual(
       samplePolicy.constraints.maxSingleRebalancePct,
     );
+  });
+});
+
+describe('deterministic gate on agent-proposed legs', () => {
+  it('accepts a sensible de-risking move under stress', async () => {
+    const snapshot = await snapshotFor(true);
+    const risk = scoreRisk(snapshot);
+    const proposal = buildRebalanceFromLegs(samplePolicy, 'r', [
+      { fromAssetId: 'tbill-rwa', toAssetId: 'usdc', weight: 0.12 },
+    ]);
+    expect(proposal.legs[0]?.amount).toBe(String(Math.round(0.12 * 1_200_000)));
+    expect(evaluatePolicy(samplePolicy, risk, snapshot, proposal)).toHaveLength(0);
+  });
+
+  it('rejects an oversized move that breaches the single-rebalance cap', async () => {
+    const snapshot = await snapshotFor(true);
+    const risk = scoreRisk(snapshot);
+    const proposal = buildRebalanceFromLegs(samplePolicy, 'r', [
+      { fromAssetId: 'tbill-rwa', toAssetId: 'usdc', weight: 0.5 },
+    ]);
+    const violations = evaluatePolicy(samplePolicy, risk, snapshot, proposal);
+    expect(violations.some((v) => v.constraint === 'maxSingleRebalancePct')).toBe(true);
   });
 });

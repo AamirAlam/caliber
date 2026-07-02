@@ -1,4 +1,5 @@
 import type {
+  AgentReview,
   RebalanceRequest,
   Recommendation,
   RiskScore,
@@ -107,6 +108,7 @@ export function buildRecommendation(
   input: DecisionInput,
   decision: Decision,
   explanation: string,
+  extra?: { agentProposed?: boolean; review?: AgentReview },
 ): Recommendation {
   return {
     id: `rec_${input.runId}`,
@@ -118,6 +120,35 @@ export function buildRecommendation(
     rebalance: decision.rebalance,
     explanation,
     confidence: decision.compliancePassed ? 0.85 : 0.95,
+    agentProposed: extra?.agentProposed ?? false,
+    review: extra?.review,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+/** Asset ids the policy recognizes — used to reject an agent proposing unknown assets. */
+export function knownAssetIds(policy: TreasuryPolicy): Set<string> {
+  return new Set(policy.allocations.map((a) => a.assetId));
+}
+
+/**
+ * Build a concrete RebalanceRequest from agent-proposed legs, converting each
+ * weight into a USD/motes amount against the notional treasury size.
+ */
+export function buildRebalanceFromLegs(
+  policy: TreasuryPolicy,
+  runId: string,
+  legs: { fromAssetId: string; toAssetId: string; weight: number }[],
+): RebalanceRequest {
+  return {
+    id: `reb_${runId}`,
+    policyId: policy.id,
+    legs: legs.map((l) => ({
+      fromAssetId: l.fromAssetId,
+      toAssetId: l.toAssetId,
+      weight: l.weight,
+      amount: String(Math.round(l.weight * TOTAL_TREASURY_USD)),
+    })),
     createdAt: new Date().toISOString(),
   };
 }

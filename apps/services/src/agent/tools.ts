@@ -2,13 +2,17 @@ import { tool } from 'ai';
 import { z } from 'zod';
 import type { RiskScore, SignalSnapshot, TreasuryPolicy } from '@helm/shared';
 import { evaluatePolicy } from '../policy/index.js';
-import { proposeRebalance } from '../decision/index.js';
+import { buildRebalanceFromLegs, proposeRebalance } from '../decision/index.js';
+import type { VaultState } from '../casper/reader.js';
 
-export interface VaultState {
-  paused: boolean;
-  rebalanceCount: number;
-  contractHash: string;
-}
+export type { VaultState };
+
+/** Shape of a proposed rebalance leg the agent can test / commit. */
+export const legSchema = z.object({
+  fromAssetId: z.string().describe('assetId to move value out of (must exist in policy)'),
+  toAssetId: z.string().describe('assetId to move value into (must exist in policy)'),
+  weight: z.number().min(0).max(1).describe('fraction of the treasury to move, 0..1'),
+});
 
 export interface AgentContext {
   runId: string;
@@ -47,21 +51,21 @@ export function buildTools(ctx: AgentContext) {
     }),
     evaluate_policy: tool({
       description:
-        'Deterministic policy check. target="hold" evaluates the current state; target="rebalance" evaluates the candidate de-risking rebalance. Returns the list of violations (empty = compliant).',
-      parameters: z.object({ target: z.enum(['hold', 'rebalance']) }),
-      execute: async ({ target }) => {
-        if (target === 'hold') {
+        'Deterministic policy check — the ONLY source of compliance truth. Omit `legs` to check whether HOLDING is compliant; pass candidate `legs` to test a rebalance you are considering. Returns the list of violations (empty array = compliant). Call this before committing.',
+      parameters: z.object({ legs: z.array(legSchema).optional() }),
+      execute: async ({ legs }) => {
+        if (!legs || legs.length === 0) {
           return { violations: evaluatePolicy(ctx.policy, ctx.risk, ctx.snapshot) };
         }
-        const proposal = proposeRebalance(ctx.policy, ctx.snapshot, ctx.runId);
-        if (!proposal) return { violations: [{ constraint: 'noProposal', detail: 'No rebalance available.' }] };
+        const proposal = buildRebalanceFromLegs(ctx.policy, ctx.runId, legs);
         return { violations: evaluatePolicy(ctx.policy, ctx.risk, ctx.snapshot, proposal) };
       },
     }),
-    propose_rebalance: tool({
-      description: 'Build a candidate de-risking rebalance (move from over-weight asset into the buffer).',
+    suggest_rebalance: tool({
+      description:
+        'Get a deterministic reference de-risking rebalance (move from the most over-weight asset into the stablecoin buffer). Use it as a starting point — you may propose something different.',
       parameters: z.object({}),
-      execute: async () => proposeRebalance(ctx.policy, ctx.snapshot, ctx.runId) ?? null,
+      execute: async () => proposeRebalance(ctx.policy, ctx.snapshot, ctx.runId)?.legs ?? null,
     }),
   };
 }

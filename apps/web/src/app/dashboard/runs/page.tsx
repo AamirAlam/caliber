@@ -195,14 +195,29 @@ function RunDetailView({
     <div className="disclosure-panel grid gap-6 sm:grid-cols-2">
       {/* Agent reasoning */}
       <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Agent reasoning
-        </p>
+        <div className="mb-2 flex items-center gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Agent reasoning
+          </p>
+          {rec?.agentProposed && (
+            <span className="rounded-full bg-brand-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-600">
+              AI-proposed
+            </span>
+          )}
+        </div>
         {loading ? (
           <p className="text-sm text-slate-400">Loading…</p>
         ) : (
           <p className="text-sm leading-relaxed text-slate-600">
             {rec?.explanation ?? run.notes ?? 'No reasoning recorded.'}
+          </p>
+        )}
+        {rec?.review && (
+          <p
+            className={`mt-3 text-xs ${rec.review.approved ? 'text-signal-emerald' : 'text-signal-rose'}`}
+          >
+            Risk reviewer: {rec.review.approved ? 'approved' : 'vetoed'} ({rec.review.severity}) —{' '}
+            {rec.review.concern}
           </p>
         )}
         {rec && rec.violations.length > 0 && (
