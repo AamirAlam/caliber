@@ -15,7 +15,8 @@
 #[cfg(feature = "livenet")]
 fn main() {
     use helm_contracts::vault::{HelmVault, HelmVaultInitArgs};
-    use odra::host::{Deployer, HostRef};
+    use odra::host::Deployer;
+    use odra::prelude::Addressable;
 
     let env = odra_casper_livenet_env::env();
     let owner = env.caller();
@@ -30,7 +31,7 @@ fn main() {
 
     println!("\n✅ HelmVault deployed.");
     println!("   owner:        {owner:?}");
-    println!("   package hash: {}", contract.address());
+    println!("   package hash: {}", contract.address().to_formatted_string());
     println!("\nCopy the package hash into:");
     println!("   apps/services/.env       HELM_VAULT_CONTRACT_HASH");
     println!("   apps/web/.env.local      NEXT_PUBLIC_VAULT_CONTRACT_HASH");

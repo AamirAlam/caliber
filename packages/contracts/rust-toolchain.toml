@@ -1,6 +1,0 @@
-# Odra 2.x relies on nightly-only features (e.g. box_patterns) in its macros,
-# and the wasm32 target for building the contract. cargo-odra drives the build.
-[toolchain]
-channel = "nightly"
-targets = ["wasm32-unknown-unknown"]
-components = ["rustfmt", "clippy"]
