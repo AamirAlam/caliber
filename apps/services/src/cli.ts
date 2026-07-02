@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { InMemoryAuditStore } from './audit/index.js';
 import { defaultDeps, executeApproved, runAgentLoop } from './orchestrator.js';
 import { samplePolicy } from './samplePolicy.js';

@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
-// casper-js-sdk ships as CommonJS; use a namespace import so Node's ESM loader
-// doesn't choke on named-export detection.
-import * as casper from 'casper-js-sdk';
+// casper-js-sdk ships as CommonJS with everything on the default export; use a
+// default import for values and a type-only import for annotations.
+import casper from 'casper-js-sdk';
+import type { PrivateKey } from 'casper-js-sdk';
 import type { RebalanceRequest, TransactionRecord } from '@helm/shared';
 import { config } from '../config.js';
 import { log } from '../logger.js';
@@ -75,7 +76,7 @@ export class CasperExecutor {
   }
 }
 
-function loadKey(): casper.PrivateKey {
+function loadKey(): PrivateKey {
   const pem = readFileSync(config.casper.secretKeyPath, 'utf8');
   const algo =
     config.casper.keyAlgo === 'secp256k1'

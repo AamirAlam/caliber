@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { InMemoryAuditStore } from './audit/index.js';
 import { buildServer } from './api/server.js';
 import { config } from './config.js';
