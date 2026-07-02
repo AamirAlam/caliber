@@ -16,6 +16,8 @@ export interface AuditStore {
   saveRun(run: AgentRunLog): Promise<void>;
   listRuns(): Promise<AgentRunLog[]>;
   getRun(id: string): Promise<AgentRunLog | undefined>;
+  getRecommendation(id: string): Promise<Recommendation | undefined>;
+  getTransaction(id: string): Promise<TransactionRecord | undefined>;
 }
 
 /** In-memory implementation. Keyed by id; `listRuns` returns newest-first. */
@@ -42,5 +44,11 @@ export class InMemoryAuditStore implements AuditStore {
   }
   async getRun(id: string): Promise<AgentRunLog | undefined> {
     return this.runs.get(id);
+  }
+  async getRecommendation(id: string): Promise<Recommendation | undefined> {
+    return this.recommendations.get(id);
+  }
+  async getTransaction(id: string): Promise<TransactionRecord | undefined> {
+    return this.transactions.get(id);
   }
 }

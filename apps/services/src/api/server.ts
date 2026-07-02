@@ -29,6 +29,19 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
   );
   app.get('/runs', async () => audit.listRuns());
 
+  // Full detail for one run: the decision reasoning + money flow + transaction.
+  app.get<{ Params: { id: string } }>('/runs/:id', async (req, reply) => {
+    const run = await audit.getRun(req.params.id);
+    if (!run) return reply.code(404).send({ error: 'run not found' });
+    const recommendation = run.recommendationId
+      ? await audit.getRecommendation(run.recommendationId)
+      : undefined;
+    const transaction = run.transactionId
+      ? await audit.getTransaction(run.transactionId)
+      : undefined;
+    return { run, recommendation: recommendation ?? null, transaction: transaction ?? null };
+  });
+
   app.get('/vault/state', async () => ({
     paused: false,
     rebalanceCount: 0,

@@ -2,17 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
-}
-
 html {
   scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
-  @apply bg-ink-950 text-slate-300 antialiased;
+  @apply bg-canvas text-slate-600;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+::selection {
+  background: rgba(54, 87, 213, 0.18);
+}
+
+@layer base {
+  h1,
+  h2,
+  h3 {
+    @apply text-ink-900;
+    letter-spacing: -0.02em;
+  }
 }
 
 @layer components {
@@ -20,48 +31,211 @@ body {
     @apply mx-auto w-full max-w-6xl px-6;
   }
 
+  /* White surface with hairline border + soft layered shadow. */
   .panel {
-    @apply rounded-xl border border-white/[0.06] bg-ink-900/60 shadow-panel backdrop-blur;
+    @apply rounded-2xl border border-slate-900/[0.07] bg-white shadow-card;
   }
 
   .eyebrow {
-    @apply text-xs font-medium uppercase tracking-[0.2em] text-helm-400/80;
+    @apply text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-brand-500;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-lg bg-helm-500 px-5 py-2.5 text-sm font-semibold text-ink-950 transition hover:bg-helm-400;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400;
   }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center rounded-lg border border-white/10 px-5 py-2.5 text-sm font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/[0.03];
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-900/10 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-900/20 hover:bg-slate-50;
+  }
+
+  /* Small status pill. */
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium;
+  }
+
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Dashboard canvas with layered depth (deference + depth). */
+  .app-surface {
+    background:
+      radial-gradient(80% 60% at 85% -10%, rgba(168, 188, 255, 0.28) 0%, rgba(246, 248, 252, 0) 55%),
+      radial-gradient(70% 50% at 0% 0%, rgba(199, 210, 254, 0.22) 0%, rgba(246, 248, 252, 0) 50%),
+      #f6f8fc;
+  }
+
+  .disclosure-btn {
+    @apply inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 transition hover:text-brand-700;
   }
 }
 
-/* ─── Animated flow timeline ─────────────────────────────────────── */
+/* ─── One orchestrated motion moment: entrance + gauge sweep ─────── */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-in {
+  animation: fade-up 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.gauge-value {
+  transition: stroke-dashoffset 1.1s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.disclosure-panel {
+  animation: fade-up 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .disclosure-panel {
+    animation: none;
+  }
+  .gauge-value {
+    transition: none;
+  }
+}
+
+/* ─── Dark theme (class strategy) ────────────────────────────────
+   Contained override block: recolors the semantic utilities the app
+   actually uses, so components don't each need dark: variants. */
+.dark body {
+  background: #0b0f1a;
+  color: #a9b4c4;
+}
+.dark h1,
+.dark h2,
+.dark h3 {
+  color: #f1f5f9;
+}
+.dark .app-surface {
+  background:
+    radial-gradient(80% 60% at 85% -10%, rgba(107, 131, 255, 0.14) 0%, rgba(11, 15, 26, 0) 55%),
+    radial-gradient(70% 50% at 0% 0%, rgba(54, 87, 213, 0.12) 0%, rgba(11, 15, 26, 0) 50%),
+    #0b0f1a;
+}
+.dark .panel {
+  background-color: #141b2b;
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 12px 32px -16px rgba(0, 0, 0, 0.7);
+}
+.dark .btn-ghost {
+  background-color: #141b2b;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #d3dae6;
+}
+.dark .btn-ghost:hover {
+  background-color: #1a2233;
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* solid backgrounds */
+.dark .bg-white {
+  background-color: #141b2b;
+}
+.dark .bg-canvas {
+  background-color: #0b0f1a;
+}
+.dark .bg-slate-50 {
+  background-color: #1a2233;
+}
+.dark .bg-slate-100 {
+  background-color: #202a3d;
+}
+/* translucent backgrounds */
+.dark .bg-white\/90,
+.dark .bg-white\/70,
+.dark .bg-white\/60 {
+  background-color: rgba(20, 27, 43, 0.9);
+}
+.dark .bg-canvas\/85,
+.dark .bg-canvas\/80 {
+  background-color: rgba(11, 15, 26, 0.82);
+}
+.dark .bg-slate-50\/60,
+.dark .bg-slate-50\/40 {
+  background-color: rgba(26, 34, 51, 0.55);
+}
+/* tint chips */
+.dark .bg-brand-50 {
+  background-color: rgba(54, 87, 213, 0.2);
+}
+.dark .bg-emerald-50 {
+  background-color: rgba(5, 150, 105, 0.18);
+}
+.dark .bg-amber-50 {
+  background-color: rgba(217, 119, 6, 0.18);
+}
+.dark .bg-rose-50 {
+  background-color: rgba(225, 29, 72, 0.18);
+}
+
+/* text */
+.dark .text-ink-900 {
+  color: #f1f5f9;
+}
+.dark .text-slate-700 {
+  color: #d3dae6;
+}
+.dark .text-slate-600 {
+  color: #a9b4c4;
+}
+.dark .text-slate-500 {
+  color: #8793a5;
+}
+.dark .text-slate-400 {
+  color: #6a7688;
+}
+.dark .text-slate-300 {
+  color: #515c6f;
+}
+.dark .text-brand-600 {
+  color: #8aa2ff;
+}
+.dark .text-brand-700 {
+  color: #a8bcff;
+}
+
+/* hairline borders (incl. arbitrary rgba utilities) */
+.dark [class*='border-slate-900'] {
+  border-color: rgba(255, 255, 255, 0.09);
+}
+.dark .divide-slate-900\/\[0\.05\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* gauge ring track */
+.dark .gauge-track {
+  stroke: #232c3f;
+}
+
+/* ─── Animated flow timeline (Architecture) ──────────────────────── */
 .flow-track {
   position: absolute;
   inset: 0;
   left: 50%;
   width: 2px;
   transform: translateX(-50%);
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(54, 87, 213, 0.14);
   border-radius: 9999px;
   overflow: hidden;
 }
-
 .flow-pulse {
   position: absolute;
   left: 0;
   right: 0;
   height: 42%;
-  background: linear-gradient(to bottom, transparent, #2dd4bf, transparent);
+  background: linear-gradient(to bottom, transparent, #3657d5, transparent);
   animation: flow-travel 2.6s linear infinite;
 }
-
 .flow-node {
   animation: flow-glow 2.6s ease-in-out infinite;
 }
-
 @keyframes flow-travel {
   0% {
     top: -45%;
@@ -78,26 +252,22 @@ body {
     opacity: 0;
   }
 }
-
 @keyframes flow-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(45, 212, 191, 0);
-    border-color: rgba(20, 184, 166, 0.5);
+    box-shadow: 0 0 0 0 rgba(54, 87, 213, 0);
   }
   50% {
-    box-shadow: 0 0 0 5px rgba(45, 212, 191, 0.12);
-    border-color: rgba(94, 234, 212, 1);
+    box-shadow: 0 0 0 5px rgba(54, 87, 213, 0.12);
   }
 }
-
 @media (prefers-reduced-motion: reduce) {
   .flow-pulse,
   .flow-node {
     animation: none;
   }
   .flow-pulse {
-    opacity: 0.6;
+    opacity: 0.5;
     top: 30%;
   }
 }

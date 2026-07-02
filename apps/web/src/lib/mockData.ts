@@ -63,7 +63,7 @@ export const demoRecommendation: Recommendation = {
 };
 
 export const demoRuns: AgentRunLog[] = [
-  { id: 'run_42', policyId: 'pol_demo', stage: 'done', status: 'completed', snapshotId: 'snap_42', riskScore: 29, recommendationId: 'rec_run_42', startedAt: '2026-06-23T09:00:00.000Z', endedAt: '2026-06-23T09:00:02.000Z', notes: 'Hold — within bands.' },
-  { id: 'run_41', policyId: 'pol_demo', stage: 'execute', status: 'completed', snapshotId: 'snap_41', riskScore: 44, recommendationId: 'rec_run_41', transactionId: 'tx_reb_41', startedAt: '2026-06-23T08:00:00.000Z', endedAt: '2026-06-23T08:00:05.000Z', notes: 'Rebalanced 12% into liquidity buffer.' },
-  { id: 'run_40', policyId: 'pol_demo', stage: 'await_approval', status: 'rejected', snapshotId: 'snap_40', riskScore: 73, recommendationId: 'rec_run_40', startedAt: '2026-06-23T07:00:00.000Z', endedAt: '2026-06-23T07:05:00.000Z', notes: 'Risk over ceiling; halted pending review.' },
+  { id: 'run_42', policyId: 'pol_demo', stage: 'done', status: 'completed', action: 'hold', snapshotId: 'snap_42', riskScore: 29, recommendationId: 'rec_run_42', startedAt: '2026-06-23T09:00:00.000Z', endedAt: '2026-06-23T09:00:02.000Z', notes: 'Hold — within bands.' },
+  { id: 'run_41', policyId: 'pol_demo', stage: 'done', status: 'completed', action: 'rebalance', snapshotId: 'snap_41', riskScore: 44, recommendationId: 'rec_run_41', transactionId: 'tx_reb_41', startedAt: '2026-06-23T08:00:00.000Z', endedAt: '2026-06-23T08:00:05.000Z', notes: 'Rebalanced 12% into liquidity buffer.' },
+  { id: 'run_40', policyId: 'pol_demo', stage: 'await_approval', status: 'rejected', action: 'halt', snapshotId: 'snap_40', riskScore: 73, recommendationId: 'rec_run_40', startedAt: '2026-06-23T07:00:00.000Z', endedAt: '2026-06-23T07:05:00.000Z', notes: 'Risk over ceiling; halted pending review.' },
 ];

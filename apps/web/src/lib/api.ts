@@ -7,6 +7,12 @@ import type {
   TreasuryPolicy,
 } from '@helm/shared';
 
+export interface RunDetail {
+  run: AgentRunLog;
+  recommendation: Recommendation | null;
+  transaction: TransactionRecord | null;
+}
+
 const BASE = process.env.NEXT_PUBLIC_SERVICES_URL ?? 'http://localhost:4000';
 
 async function get<T>(path: string): Promise<T | null> {
@@ -44,6 +50,7 @@ export const api = {
   getLatestRisk: () => get<RiskScore>('/risk/latest'),
   getLatestRecommendation: () => get<Recommendation>('/recommendation/latest'),
   getRuns: () => get<AgentRunLog[]>('/runs'),
+  getRun: (id: string) => get<RunDetail>(`/runs/${id}`),
   getVaultState: () => get<VaultState>('/vault/state'),
   runStress: (active = true) =>
     post<{

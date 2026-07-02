@@ -1,43 +1,58 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Helm design language: institutional, calm, premium. A deep slate/ink base
- * with a single restrained teal accent ("helm") and a warm signal amber for
- * risk states. No neon, no noise.
+ * Helm design language — premium, light, institutional-calm SaaS.
+ * A cool near-white canvas with soft blue gradient washes, a single confident
+ * royal-blue brand accent, hairline-bordered white surfaces, and generous space.
  */
 const config: Config = {
+  darkMode: 'class',
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
+        canvas: '#f6f8fc',
         ink: {
-          950: '#0a0e14',
-          900: '#0f141c',
-          800: '#161d28',
-          700: '#1f2937',
-          600: '#374151',
+          900: '#0a0f1e',
+          800: '#151b2e',
+          700: '#28304a',
         },
-        helm: {
-          400: '#5eead4',
-          500: '#2dd4bf',
-          600: '#14b8a6',
-          700: '#0f8a80',
+        brand: {
+          50: '#eef2ff',
+          100: '#e0e7ff',
+          200: '#c7d2fe',
+          300: '#a8bcff',
+          400: '#6b83ff',
+          500: '#3657d5',
+          600: '#2f49b8',
+          700: '#273c99',
         },
         signal: {
-          amber: '#f0b429',
-          rose: '#e0607e',
+          amber: '#d97706',
+          rose: '#e11d48',
+          emerald: '#059669',
         },
       },
       fontFamily: {
         sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
+      borderRadius: {
+        xl: '0.875rem',
+        '2xl': '1.25rem',
+      },
       boxShadow: {
-        panel: '0 1px 0 0 rgba(255,255,255,0.04) inset, 0 12px 40px -12px rgba(0,0,0,0.6)',
+        card: '0 1px 2px rgba(16,24,40,0.04), 0 12px 32px -16px rgba(16,24,40,0.18)',
+        soft: '0 1px 2px rgba(16,24,40,0.05)',
+        pop: '0 20px 48px -16px rgba(54,87,213,0.30)',
+      },
+      letterSpacing: {
+        tightish: '-0.011em',
+        tighter2: '-0.028em',
       },
       backgroundImage: {
-        'grid-faint':
-          'linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px)',
+        'brand-fade':
+          'radial-gradient(60% 60% at 50% 0%, rgba(168,188,255,0.35) 0%, rgba(246,248,252,0) 70%)',
       },
     },
   },

@@ -15,17 +15,17 @@ const points = [
 
 export function Explanation() {
   return (
-    <section className="border-t border-white/[0.06] py-20 md:py-28">
+    <section className="py-20 md:py-28">
       <div className="container-helm">
         <p className="eyebrow">What Helm is</p>
-        <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight text-slate-50 md:text-4xl">
+        <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tighter2 text-ink-900 md:text-[2.6rem] md:leading-[1.1]">
           A control plane for treasuries that hold real-world assets.
         </h2>
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
+        <div className="mt-12 grid gap-5 md:grid-cols-3">
           {points.map((p) => (
-            <div key={p.title} className="panel p-6">
-              <h3 className="text-lg font-semibold text-slate-100">{p.title}</h3>
-              <p className="mt-3 text-sm leading-relaxed text-slate-400">{p.body}</p>
+            <div key={p.title} className="panel p-7">
+              <h3 className="text-lg font-semibold text-ink-900">{p.title}</h3>
+              <p className="mt-3 text-[0.95rem] leading-relaxed text-slate-600">{p.body}</p>
             </div>
           ))}
         </div>

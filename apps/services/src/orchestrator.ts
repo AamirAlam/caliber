@@ -62,8 +62,9 @@ export async function runAgentLoop(deps: OrchestratorDeps, seq: number): Promise
   await audit.saveRecommendation(recommendation);
   state.latestRecommendation = recommendation;
   run.stage = 'generate_decision';
+  run.action = recommendation.action;
   run.recommendationId = recommendation.id;
-  run.notes = `action=${recommendation.action}; tools=[${toolTrace.join(', ')}]`;
+  run.notes = `tools=[${toolTrace.join(', ')}]`;
 
   log.info('decision', {
     runId,
@@ -149,6 +150,7 @@ export async function executeApproved(
   run.stage = 'done';
   run.status = 'completed';
   run.transactionId = tx.id;
+  run.deployHash = tx.deployHash;
   run.approvedBy = approver;
   run.endedAt = new Date().toISOString();
   await audit.saveRun(run);
