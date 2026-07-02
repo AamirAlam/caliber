@@ -39,8 +39,12 @@ export const AgentRunLogSchema = z.object({
   status: z.enum(['running', 'completed', 'failed', 'rejected']),
   snapshotId: z.string().optional(),
   riskScore: z.number().min(0).max(100).optional(),
+  /** The agent's decision for this run: hold, rebalance, or halt. */
+  action: z.enum(['hold', 'rebalance', 'halt']).optional(),
   recommendationId: z.string().optional(),
   transactionId: z.string().optional(),
+  /** On-chain deploy hash once a rebalance has been submitted. */
+  deployHash: z.string().optional(),
   /** Who approved execution, if a human did. */
   approvedBy: z.string().optional(),
   startedAt: z.string().datetime(),
