@@ -154,5 +154,26 @@ export async function executeApproved(
   await audit.saveRun(run);
 
   state.pendingRun = undefined;
+
+  // Fire-and-forget finalization poll: updates the tx record once the deploy
+  // finalizes on-chain. The dashboard's polling reflects the change.
+  if (tx.status === 'submitted' && tx.deployHash) {
+    void finalizeInBackground(deps, tx);
+  }
+
   return { run, tx };
+}
+
+async function finalizeInBackground(deps: OrchestratorDeps, tx: TransactionRecord): Promise<void> {
+  try {
+    const status = await deps.executor.waitForFinalization(tx.deployHash!);
+    await deps.audit.saveTransaction({
+      ...tx,
+      status,
+      finalizedAt: new Date().toISOString(),
+    });
+    log.info('transaction finalized', { id: tx.id, status });
+  } catch (err) {
+    log.warn('finalization poll failed', { id: tx.id, err: String(err) });
+  }
 }

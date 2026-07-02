@@ -22,26 +22,38 @@ Bodies are scaffolding with `TODO`s — the storage and event wiring is left to 
 
 ## Toolchain
 
+Odra 2.x needs a **nightly** Rust toolchain (pinned by `rust-toolchain.toml`)
+plus the wasm target, and `cargo-odra`:
+
 ```bash
-rustup target add wasm32-unknown-unknown
 cargo install cargo-odra        # https://odra.dev
-cargo install casper-client     # for deploys
+# nightly + wasm32 target are auto-selected via rust-toolchain.toml
 ```
 
 ## Develop
 
 ```bash
 pnpm --filter @helm/contracts build   # cargo odra build  → wasm/HelmVault.wasm
-pnpm --filter @helm/contracts test    # cargo odra test   (in-memory backend)
+pnpm --filter @helm/contracts test    # cargo odra test   (in-memory OdraVM)
 ```
 
-## Deploy to testnet
+Tests cover record-rebalance (count + event), the paused guard, and owner
+access control. All five pass on the OdraVM with no network.
 
-1. `cp .env.example .env` and fill in RPC, chain name, and a funded key
-   (faucet: https://testnet.cspr.live/tools/faucet).
-2. `pnpm --filter @helm/contracts deploy:testnet`
-3. Record the resulting contract package hash into the web and services
-   `.env` files (`HELM_VAULT_CONTRACT_HASH` / `NEXT_PUBLIC_VAULT_CONTRACT_HASH`).
+## Deploy to testnet (Odra Livenet)
 
-> Tip: the Casper MCP server and the `cspr-click` agent skill can build, sign,
-> and submit deploys via natural language — handy during the hackathon.
+1. Generate and fund a key:
+   ```bash
+   casper-client keygen ./keys
+   # fund the public key at https://testnet.cspr.live/tools/faucet
+   ```
+2. `cp .env.example .env` and set the `ODRA_CASPER_LIVENET_*` values.
+3. `pnpm --filter @helm/contracts deploy:testnet`
+   — builds the wasm and runs `bin/helm_vault_on_livenet.rs` (`--features livenet`),
+   which submits the install deploy and **prints the contract package hash**.
+4. Copy that hash into `apps/services/.env` (`HELM_VAULT_CONTRACT_HASH`) and
+   `apps/web/.env.local` (`NEXT_PUBLIC_VAULT_CONTRACT_HASH`), then set
+   `HELM_DRY_RUN=false` to submit real rebalances.
+
+> Alternative: the Casper MCP server and the `cspr-click` agent skill can also
+> build, sign, and submit deploys via natural language.

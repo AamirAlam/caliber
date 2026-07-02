@@ -5,6 +5,10 @@ export const config = {
     networkName: process.env.CASPER_NETWORK_NAME ?? 'casper-test',
     vaultContractHash: process.env.HELM_VAULT_CONTRACT_HASH ?? '',
     secretKeyPath: process.env.CASPER_SECRET_KEY_PATH ?? '',
+    /** Signing key algorithm: 'ed25519' (default) or 'secp256k1'. */
+    keyAlgo: process.env.HELM_KEY_ALGO ?? 'ed25519',
+    /** Payment (motes) for the record_rebalance contract call. */
+    paymentMotes: Number(process.env.HELM_PAYMENT_MOTES ?? '2500000000'),
   },
   ai: {
     /** LLM provider — model-agnostic. Currently only 'anthropic' is wired. */
