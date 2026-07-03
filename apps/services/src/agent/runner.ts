@@ -62,6 +62,7 @@ export type ReviewFn = (args: {
 export async function generateRecommendation(
   input: DecisionInput,
   vaultState: VaultState = DEFAULT_VAULT_STATE,
+  memory = '',
 ): Promise<AgentResult> {
   const model = resolveModel();
 
@@ -75,7 +76,7 @@ export async function generateRecommendation(
 
   const mcp = await getCasperMcpTools();
   try {
-    const propose: ProposeFn = (feedback) => runProposer(model, input, vaultState, mcp.tools, feedback);
+    const propose: ProposeFn = (feedback) => runProposer(model, input, vaultState, mcp.tools, feedback, memory);
     const review: ReviewFn = (args) => reviewProposal(model, args);
     return await runDeliberation(input, propose, review);
   } catch (err) {
@@ -173,6 +174,7 @@ async function runProposer(
   vaultState: VaultState,
   mcpTools: Record<string, unknown>,
   feedback?: string,
+  memory = '',
 ): Promise<{ commit: Commit | null; trace: string[] }> {
   const { policy, risk } = input;
   let committed: Commit | null = null;
@@ -191,13 +193,14 @@ async function runProposer(
   };
   Object.assign(tools, mcpTools);
 
+  const history = memory ? `${memory}\n\n` : '';
   const revision = feedback ? `\n\nThis is a revision. Your previous proposal was rejected — ${feedback}` : '';
   const out = await generateText({
     model,
     system: PROPOSER_SYSTEM,
     tools,
     maxSteps: 10,
-    prompt: `Decide this cycle for the "${policy.name}" treasury. Risk is ${risk.band} (${risk.score}/100). Investigate with the tools, design a compliant move if warranted, then commit_decision.${revision}`,
+    prompt: `${history}Decide this cycle for the "${policy.name}" treasury. Risk is ${risk.band} (${risk.score}/100). Investigate with the tools, design a compliant move if warranted, then commit_decision.${revision}`,
   });
 
   const trace = (out.steps ?? []).flatMap((s) => (s.toolCalls ?? []).map((c) => c.toolName));

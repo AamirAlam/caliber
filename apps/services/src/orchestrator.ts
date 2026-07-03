@@ -1,6 +1,7 @@
 import type { AgentRunLog, TransactionRecord } from '@caliber/shared';
 import { generateRecommendation } from './agent/runner.js';
 import { readVaultStateCached } from './casper/reader.js';
+import { formatMemory, summarizeHistory } from './memory.js';
 import type { AuditStore } from './audit/index.js';
 import { evaluatePolicy } from './policy/index.js';
 import { CasperExecutor } from './execution/index.js';
@@ -55,9 +56,12 @@ export async function runAgentLoop(deps: OrchestratorDeps, seq: number): Promise
   run.riskScore = risk.score;
 
   const vaultState = await readVaultStateCached();
+  // Short-term memory: last N prior decisions, so the agent reasons with history.
+  const memory = formatMemory(summarizeHistory(await audit.listRuns(), runId));
   const { recommendation, toolTrace } = await generateRecommendation(
     { runId, policy, risk, snapshot },
     vaultState,
+    memory,
   );
   await audit.saveRecommendation(recommendation);
   state.latestRecommendation = recommendation;

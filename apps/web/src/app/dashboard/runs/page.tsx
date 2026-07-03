@@ -66,6 +66,8 @@ export default function RunsPage() {
         </span>
       </header>
 
+      <RiskTrend runs={runs} />
+
       <div className="mt-6 panel overflow-x-auto">
         <table className="w-full text-left text-sm sm:min-w-[680px]">
           <thead className="border-b border-slate-900/[0.06] bg-slate-50/60 text-[11px] uppercase tracking-wide text-slate-400">
@@ -174,6 +176,47 @@ export default function RunsPage() {
 
 function RowGroup({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
+}
+
+/** Short-term memory, visualized: the risk scores the agent reasons over. */
+function RiskTrend({ runs }: { runs: AgentRunLog[] }) {
+  const series = runs
+    .filter((r) => typeof r.riskScore === 'number')
+    .slice(0, 12)
+    .map((r) => r.riskScore as number)
+    .reverse();
+  if (series.length < 2) return null;
+
+  const w = 180;
+  const h = 40;
+  const pts = series
+    .map((v, i) => {
+      const x = (i / (series.length - 1)) * w;
+      const y = h - (Math.min(100, Math.max(0, v)) / 100) * h;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  const latest = series[series.length - 1]!;
+  const color = latest >= 75 ? '#e11d48' : latest >= 50 ? '#d97706' : latest >= 25 ? '#3657d5' : '#059669';
+
+  return (
+    <div className="mt-5 flex items-center gap-4 panel p-4">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Agent memory</p>
+        <p className="mt-1 text-sm text-slate-600">
+          Risk trend the agent reasons over — {series.slice(-3).join(' → ')}
+        </p>
+      </div>
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="ml-auto shrink-0" aria-hidden>
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        {series.map((v, i) => {
+          const x = (i / (series.length - 1)) * w;
+          const y = h - (Math.min(100, Math.max(0, v)) / 100) * h;
+          return <circle key={i} cx={x} cy={y} r={i === series.length - 1 ? 2.6 : 1.4} fill={color} />;
+        })}
+      </svg>
+    </div>
+  );
 }
 
 function RunDetailView({
