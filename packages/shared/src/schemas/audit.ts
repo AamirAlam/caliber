@@ -30,7 +30,7 @@ export const AgentRunStageSchema = z.enum([
 /**
  * A complete, append-only audit record of one agent loop: what it saw,
  * what it decided, why, and what it did on-chain. This is the spine of
- * Helm's explainability story.
+ * Caliber's explainability story.
  */
 export const AgentRunLogSchema = z.object({
   id: z.string().min(1),

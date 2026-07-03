@@ -4,7 +4,7 @@ import type {
   RiskScore,
   Signal,
   TreasuryPolicy,
-} from '@helm/shared';
+} from '@caliber/shared';
 
 /**
  * Static demo data for the dashboard shell. Replace with live calls to the

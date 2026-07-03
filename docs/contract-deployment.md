@@ -23,15 +23,15 @@ cp .env.example .env
 ## 3. Build & deploy
 
 ```bash
-pnpm --filter @helm/contracts build          # → wasm/HelmVault.wasm
-pnpm --filter @helm/contracts deploy:testnet # scaffold script — implement the put-deploy
+pnpm --filter @caliber/contracts build          # → wasm/CaliberVault.wasm
+pnpm --filter @caliber/contracts deploy:testnet # scaffold script — implement the put-deploy
 ```
 
 ## 4. Wire the hash back into the apps
 
 After finalization, copy the contract package hash into:
 
-- `apps/services/.env` → `HELM_VAULT_CONTRACT_HASH`
+- `apps/services/.env` → `CALIBER_VAULT_CONTRACT_HASH`
 - `apps/web/.env.local` → `NEXT_PUBLIC_VAULT_CONTRACT_HASH`
 
 ## Alternatives

@@ -1,6 +1,6 @@
-//! Helm Casper contracts.
+//! Caliber Casper contracts.
 //!
-//! The treasury-vault contract is the on-chain anchor of Helm: it stores the
+//! The treasury-vault contract is the on-chain anchor of Caliber: it stores the
 //! active policy reference, records approved rebalances, supports pause/resume
 //! and owner-gated access control, and emits audit events for every action.
 #![cfg_attr(not(test), no_std)]

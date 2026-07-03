@@ -2,7 +2,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
 /**
- * Shared flat ESLint config for all Helm TypeScript packages.
+ * Shared flat ESLint config for all Caliber TypeScript packages.
  * Import and spread into a package-local `eslint.config.js`.
  */
 export default tseslint.config(

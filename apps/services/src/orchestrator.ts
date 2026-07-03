@@ -1,4 +1,4 @@
-import type { AgentRunLog, TransactionRecord } from '@helm/shared';
+import type { AgentRunLog, TransactionRecord } from '@caliber/shared';
 import { generateRecommendation } from './agent/runner.js';
 import { readVaultStateCached } from './casper/reader.js';
 import type { AuditStore } from './audit/index.js';

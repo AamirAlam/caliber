@@ -9,10 +9,10 @@ const nav = [
 export function SiteHeader() {
   return (
     <header className="sticky top-0 z-30 border-b border-slate-900/[0.06] bg-canvas/80 backdrop-blur-xl">
-      <div className="container-helm flex h-16 items-center justify-between">
+      <div className="container-caliber flex h-16 items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5">
-          <HelmMark />
-          <span className="text-[0.95rem] font-semibold tracking-tightish text-ink-900">Helm</span>
+          <CaliberMark />
+          <span className="text-[0.95rem] font-semibold tracking-tightish text-ink-900">Caliber</span>
         </Link>
         <nav className="hidden items-center gap-8 md:flex">
           {nav.map((item) => (
@@ -33,7 +33,7 @@ export function SiteHeader() {
   );
 }
 
-export function HelmMark({ className = '' }: { className?: string }) {
+export function CaliberMark({ className = '' }: { className?: string }) {
   // A ship's-wheel inspired mark — steering, control, calm.
   return (
     <span

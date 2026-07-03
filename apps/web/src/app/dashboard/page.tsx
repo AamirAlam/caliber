@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { Recommendation, RiskScore, SignalSnapshot, TreasuryPolicy } from '@helm/shared';
+import type { Recommendation, RiskScore, SignalSnapshot, TreasuryPolicy } from '@caliber/shared';
 import { api, type VaultState } from '@/lib/api';
 import { demoPolicy, demoRecommendation, demoSignals } from '@/lib/mockData';
 
@@ -182,7 +182,7 @@ export default function DashboardPage() {
             )}
             {!live && (
               <p className="mt-3 text-xs text-slate-500">
-                Start the agent (<code className="rounded bg-slate-100 px-1 py-0.5 font-mono">pnpm --filter @helm/services dev</code>) to go live.
+                Start the agent (<code className="rounded bg-slate-100 px-1 py-0.5 font-mono">pnpm --filter @caliber/services dev</code>) to go live.
               </p>
             )}
           </div>

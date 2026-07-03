@@ -3,16 +3,16 @@ import { readFileSync } from 'node:fs';
 // default import for values and a type-only import for annotations.
 import casper from 'casper-js-sdk';
 import type { PrivateKey } from 'casper-js-sdk';
-import type { RebalanceRequest, TransactionRecord } from '@helm/shared';
+import type { RebalanceRequest, TransactionRecord } from '@caliber/shared';
 import { config } from '../config.js';
 import { log } from '../logger.js';
 
 /**
  * Wraps Casper transaction construction + submission. `submit` builds a
- * TransactionV1 that calls the HelmVault `record_rebalance` entry point, signs
+ * TransactionV1 that calls the CaliberVault `record_rebalance` entry point, signs
  * it with the agent key, and submits it to the testnet RPC via casper-js-sdk.
  *
- * In `HELM_DRY_RUN` mode it returns a synthetic `submitted` record so the full
+ * In `CALIBER_DRY_RUN` mode it returns a synthetic `submitted` record so the full
  * UX is demoable without a funded key.
  */
 export class CasperExecutor {
@@ -32,7 +32,7 @@ export class CasperExecutor {
     }
 
     if (!config.casper.vaultContractHash) {
-      return { ...base, status: 'failed', error: 'HELM_VAULT_CONTRACT_HASH not set' };
+      return { ...base, status: 'failed', error: 'CALIBER_VAULT_CONTRACT_HASH not set' };
     }
 
     try {

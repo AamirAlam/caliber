@@ -1,8 +1,8 @@
 {
-  "name": "@helm/contracts",
+  "name": "@caliber/contracts",
   "version": "0.1.0",
   "private": true,
-  "description": "Casper treasury-vault contract for Helm (Odra). Driven via cargo-odra.",
+  "description": "Casper treasury-vault contract for Caliber (Odra). Driven via cargo-odra.",
   "scripts": {
     "build": "cargo odra build",
     "test": "cargo odra test",

@@ -5,7 +5,7 @@ import type {
   SignalSnapshot,
   TransactionRecord,
   TreasuryPolicy,
-} from '@helm/shared';
+} from '@caliber/shared';
 
 export interface RunDetail {
   run: AgentRunLog;

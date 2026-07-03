@@ -1,6 +1,6 @@
-# @helm/shared
+# @caliber/shared
 
-The shared domain model for Helm. Everything the frontend, off-chain services,
+The shared domain model for Caliber. Everything the frontend, off-chain services,
 and tests agree on lives here as **Zod schemas** with TypeScript types inferred
 from them — one definition, validated at runtime and typed at compile time.
 
@@ -27,7 +27,7 @@ from them — one definition, validated at runtime and typed at compile time.
 ## Usage
 
 ```ts
-import { TreasuryPolicySchema, type TreasuryPolicy } from '@helm/shared';
+import { TreasuryPolicySchema, type TreasuryPolicy } from '@caliber/shared';
 
 const policy: TreasuryPolicy = TreasuryPolicySchema.parse(raw);
 ```

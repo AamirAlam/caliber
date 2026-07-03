@@ -16,4 +16,4 @@ copy_env packages/contracts/.env.example packages/contracts/.env
 
 echo "==> Done. Next:"
 echo "    pnpm dev                         # web + services"
-echo "    pnpm --filter @helm/contracts test"
+echo "    pnpm --filter @caliber/contracts test"

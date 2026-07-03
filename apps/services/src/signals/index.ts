@@ -1,4 +1,4 @@
-import type { Signal, SignalSnapshot } from '@helm/shared';
+import type { Signal, SignalSnapshot } from '@caliber/shared';
 import type { AppState } from '../state.js';
 
 /**

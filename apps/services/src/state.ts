@@ -4,7 +4,7 @@ import type {
   RiskScore,
   SignalSnapshot,
   TreasuryPolicy,
-} from '@helm/shared';
+} from '@caliber/shared';
 
 /** A run paused at `await_approval`, holding the candidate move + an approval token. */
 export interface PendingRun {

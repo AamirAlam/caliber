@@ -27,7 +27,7 @@ body {
 }
 
 @layer components {
-  .container-helm {
+  .container-caliber {
     @apply mx-auto w-full max-w-6xl px-6;
   }
 

@@ -3,18 +3,18 @@ type Item =
   | { kind: 'step'; n: string; title: string; desc: string; tools: string[] };
 
 const items: Item[] = [
-  { kind: 'label', text: 'Off-chain — Helm agent' },
+  { kind: 'label', text: 'Off-chain — Caliber agent' },
   { kind: 'step', n: '01', title: 'Ingest signals', desc: 'Live market and RWA data is pulled in continuously.', tools: ['CSPR.cloud', 'x402'] },
-  { kind: 'step', n: '02', title: 'Reason & score risk', desc: 'The agent assesses liquidity and risk against the mandate.', tools: ['Helm agent'] },
-  { kind: 'step', n: '03', title: 'Check policy guardrails', desc: 'Deterministic rules approve, hold, or halt the action.', tools: ['Helm agent'] },
+  { kind: 'step', n: '02', title: 'Reason & score risk', desc: 'The agent assesses liquidity and risk against the mandate.', tools: ['Caliber agent'] },
+  { kind: 'step', n: '03', title: 'Check policy guardrails', desc: 'Deterministic rules approve, hold, or halt the action.', tools: ['Caliber agent'] },
   { kind: 'label', text: 'On-chain — Casper' },
   { kind: 'step', n: '04', title: 'Sign the approved action', desc: 'The rebalance is signed before anything is submitted.', tools: ['CSPR.click', 'casper-eip-712'] },
   { kind: 'step', n: '05', title: 'Submit to Casper', desc: 'The deploy is broadcast and executed on the network.', tools: ['Casper MCP'] },
-  { kind: 'step', n: '06', title: 'Record & audit', desc: 'HelmVault stores the rebalance and emits an audit event.', tools: ['Odra · HelmVault'] },
+  { kind: 'step', n: '06', title: 'Record & audit', desc: 'CaliberVault stores the rebalance and emits an audit event.', tools: ['Odra · CaliberVault'] },
 ];
 
 const toolkit = [
-  { label: 'Odra', desc: 'Smart contract framework — the HelmVault contract.' },
+  { label: 'Odra', desc: 'Smart contract framework — the CaliberVault contract.' },
   { label: 'Casper MCP Server', desc: 'Query state and submit deploys via MCP.' },
   { label: 'CSPR.click', desc: 'Wallet management and transaction signing.' },
   { label: 'CSPR.cloud', desc: 'REST / Streaming / Node data middleware.' },
@@ -25,7 +25,7 @@ const toolkit = [
 export function Architecture() {
   return (
     <section id="architecture" className="py-20 md:py-28">
-      <div className="container-helm">
+      <div className="container-caliber">
         <p className="eyebrow">Architecture</p>
         <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tighter2 text-ink-900 md:text-[2.6rem] md:leading-[1.1]">
           Designed on Casper, powered by the agentic toolkit.

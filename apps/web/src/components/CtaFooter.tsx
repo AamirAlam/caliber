@@ -1,14 +1,14 @@
 import Link from 'next/link';
-import { HelmMark } from './SiteHeader';
+import { CaliberMark } from './SiteHeader';
 
 export function CtaFooter() {
   return (
     <footer>
-      <section className="container-helm py-20 md:py-28">
+      <section className="container-caliber py-20 md:py-28">
         <div className="relative overflow-hidden rounded-2xl bg-ink-900 p-10 text-center shadow-card md:p-16">
           <div className="pointer-events-none absolute -top-24 left-1/2 h-64 w-[36rem] -translate-x-1/2 rounded-full bg-brand-500/30 blur-3xl" />
           <h2 className="relative mx-auto max-w-2xl text-3xl font-semibold tracking-tighter2 text-white md:text-4xl">
-            Put a policy at the helm of your RWA treasury.
+            Put a policy at the caliber of your RWA treasury.
           </h2>
           <p className="relative mx-auto mt-4 max-w-xl text-slate-300">
             Explore the dashboard, run a stress scenario, and watch an approved rebalance settle on
@@ -32,10 +32,10 @@ export function CtaFooter() {
           </div>
         </div>
       </section>
-      <div className="container-helm flex flex-col items-center justify-between gap-4 border-t border-slate-900/[0.06] py-8 text-sm text-slate-500 md:flex-row">
+      <div className="container-caliber flex flex-col items-center justify-between gap-4 border-t border-slate-900/[0.06] py-8 text-sm text-slate-500 md:flex-row">
         <div className="flex items-center gap-2.5">
-          <HelmMark />
-          <span>Helm — AI treasury control plane for RWAs</span>
+          <CaliberMark />
+          <span>Caliber — AI treasury control plane for RWAs</span>
         </div>
         <span className="font-mono text-xs">Built for the Casper Agentic Buildathon</span>
       </div>

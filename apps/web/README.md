@@ -1,6 +1,6 @@
-# @helm/web — frontend
+# @caliber/web — frontend
 
-The Helm control surface: a polished marketing landing page plus a dashboard
+The Caliber control surface: a polished marketing landing page plus a dashboard
 shell, built with Next.js (App Router), TypeScript, and Tailwind CSS.
 
 ## Pages
@@ -14,12 +14,12 @@ shell, built with Next.js (App Router), TypeScript, and Tailwind CSS.
 
 ```bash
 cp .env.example .env.local
-pnpm --filter @helm/web dev    # http://localhost:3000
+pnpm --filter @caliber/web dev    # http://localhost:3000
 ```
 
 ## Notes
 
-- Shared domain types come from `@helm/shared`.
+- Shared domain types come from `@caliber/shared`.
 - The dashboard renders static demo data from `src/lib/mockData.ts`. Wire it to
   the services API (`NEXT_PUBLIC_SERVICES_URL`) for live data.
 - Design tokens live in `tailwind.config.ts` (ink base, single teal accent).

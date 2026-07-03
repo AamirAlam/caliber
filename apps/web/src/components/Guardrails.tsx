@@ -8,7 +8,7 @@ const rails = [
 export function Guardrails() {
   return (
     <section id="guardrails" className="py-20 md:py-28">
-      <div className="container-helm">
+      <div className="container-caliber">
         <p className="eyebrow">Trust &amp; guardrails</p>
         <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tighter2 text-ink-900 md:text-[2.6rem] md:leading-[1.1]">
           Autonomy you can actually let near a treasury.

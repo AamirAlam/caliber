@@ -5,7 +5,7 @@ import type {
   RiskScore,
   SignalSnapshot,
   TreasuryPolicy,
-} from '@helm/shared';
+} from '@caliber/shared';
 import { evaluatePolicy, type PolicyViolation } from '../policy/index.js';
 import { deriveAllocations, liquidityBufferPct, TOTAL_TREASURY_USD } from '../portfolio.js';
 

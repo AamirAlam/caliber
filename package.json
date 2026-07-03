@@ -1,8 +1,8 @@
 {
-  "name": "helm",
+  "name": "caliber",
   "private": true,
   "version": "0.1.0",
-  "description": "Helm — a policy-driven AI treasury control plane for tokenized real-world assets on Casper.",
+  "description": "Caliber — a policy-driven AI treasury control plane for tokenized real-world assets on Casper.",
   "packageManager": "pnpm@9.7.0",
   "engines": {
     "node": ">=20"
@@ -15,8 +15,8 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\"",
-    "contracts:build": "pnpm --filter @helm/contracts build",
-    "contracts:test": "pnpm --filter @helm/contracts test"
+    "contracts:build": "pnpm --filter @caliber/contracts build",
+    "contracts:test": "pnpm --filter @caliber/contracts test"
   },
   "devDependencies": {
     "prettier": "^3.3.3",

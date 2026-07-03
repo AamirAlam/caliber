@@ -1,7 +1,7 @@
 #![doc = "Binary for building schema definitions from Odra contracts."]
 #![allow(unused_imports, redundant_imports)]
 #![allow(clippy::single_component_path_imports)]
-use helm_contracts;
+use caliber_contracts;
 
 #[cfg(all(not(odra_module = ""), not(target_arch = "wasm32")))]
 extern "Rust" {

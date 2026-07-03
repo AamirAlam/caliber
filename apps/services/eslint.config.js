@@ -1,2 +1,2 @@
-import helm from '@helm/config/eslint';
-export default helm;
+import caliber from '@caliber/config/eslint';
+export default caliber;

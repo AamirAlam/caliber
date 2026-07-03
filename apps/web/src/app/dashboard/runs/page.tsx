@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { AgentRunLog } from '@helm/shared';
+import type { AgentRunLog } from '@caliber/shared';
 import { api, type RunDetail } from '@/lib/api';
 import { demoRuns } from '@/lib/mockData';
 

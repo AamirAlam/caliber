@@ -3,10 +3,10 @@ import type {
   Recommendation,
   SignalSnapshot,
   TransactionRecord,
-} from '@helm/shared';
+} from '@caliber/shared';
 
 /**
- * Append-only audit store. The audit trail is what makes Helm's decisions
+ * Append-only audit store. The audit trail is what makes Caliber's decisions
  * explainable and reviewable. Back with Postgres/SQLite for production.
  */
 export interface AuditStore {

@@ -1,4 +1,4 @@
-import type { TreasuryPolicy } from '@helm/shared';
+import type { TreasuryPolicy } from '@caliber/shared';
 
 /** A realistic example policy used for local dev and the run-once CLI. */
 export const samplePolicy: TreasuryPolicy = {

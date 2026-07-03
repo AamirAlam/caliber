@@ -1,11 +1,11 @@
 const points = [
   {
     title: 'Not a yield bot',
-    body: 'Helm does not chase APY blindly. It treats a treasury as a mandate with constraints — allocation bands, liquidity buffers, and risk ceilings — and acts only within them.',
+    body: 'Caliber does not chase APY blindly. It treats a treasury as a mandate with constraints — allocation bands, liquidity buffers, and risk ceilings — and acts only within them.',
   },
   {
     title: 'Built for RWAs',
-    body: 'Tokenized T-bills, credit, and money-market positions carry redemption and liquidity risk that pure-DeFi tools ignore. Helm models those signals as first-class inputs.',
+    body: 'Tokenized T-bills, credit, and money-market positions carry redemption and liquidity risk that pure-DeFi tools ignore. Caliber models those signals as first-class inputs.',
   },
   {
     title: 'Agentic, with a seatbelt',
@@ -16,8 +16,8 @@ const points = [
 export function Explanation() {
   return (
     <section className="py-20 md:py-28">
-      <div className="container-helm">
-        <p className="eyebrow">What Helm is</p>
+      <div className="container-caliber">
+        <p className="eyebrow">What Caliber is</p>
         <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tighter2 text-ink-900 md:text-[2.6rem] md:leading-[1.1]">
           A control plane for treasuries that hold real-world assets.
         </h2>

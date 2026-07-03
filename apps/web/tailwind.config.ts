@@ -1,7 +1,7 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * Helm design language — premium, light, institutional-calm SaaS.
+ * Caliber design language — premium, light, institutional-calm SaaS.
  * A cool near-white canvas with soft blue gradient washes, a single confident
  * royal-blue brand accent, hairline-bordered white surfaces, and generous space.
  */

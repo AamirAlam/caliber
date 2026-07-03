@@ -1,4 +1,4 @@
-import type { Signal, SignalSnapshot, TreasuryPolicy, RebalanceRequest } from '@helm/shared';
+import type { Signal, SignalSnapshot, TreasuryPolicy, RebalanceRequest } from '@caliber/shared';
 
 /**
  * Notional total treasury value (USD). The demo derives current allocation

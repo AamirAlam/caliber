@@ -1,6 +1,6 @@
-# @helm/config
+# @caliber/config
 
-Shared developer tooling configuration for the Helm monorepo: a flat ESLint
+Shared developer tooling configuration for the Caliber monorepo: a flat ESLint
 config and a base `tsconfig` other packages extend.
 
 ## Usage
@@ -8,12 +8,12 @@ config and a base `tsconfig` other packages extend.
 **ESLint** (`eslint.config.js` in a consuming package):
 
 ```js
-import helm from '@helm/config/eslint';
-export default helm;
+import caliber from '@caliber/config/eslint';
+export default caliber;
 ```
 
 **TypeScript** (`tsconfig.json`):
 
 ```json
-{ "extends": "@helm/config/tsconfig" }
+{ "extends": "@caliber/config/tsconfig" }
 ```

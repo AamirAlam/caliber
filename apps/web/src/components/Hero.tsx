@@ -7,7 +7,7 @@ export function Hero() {
       <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] bg-brand-fade" />
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-[46rem] -translate-x-1/2 rounded-full bg-brand-300/30 blur-3xl" />
 
-      <div className="container-helm relative pb-24 pt-20 md:pb-28 md:pt-24">
+      <div className="container-caliber relative pb-24 pt-20 md:pb-28 md:pt-24">
         <div className="inline-flex items-center gap-2 rounded-full border border-slate-900/[0.07] bg-white/70 px-3 py-1 text-xs font-medium text-slate-600 shadow-soft backdrop-blur">
           <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
           Casper Agentic Buildathon · live on testnet
@@ -17,7 +17,7 @@ export function Hero() {
           Policy-driven treasury management for tokenized real-world assets.
         </h1>
         <p className="mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">
-          Helm pairs disciplined risk frameworks with agentic automation and full onchain
+          Caliber pairs disciplined risk frameworks with agentic automation and full onchain
           transparency. It watches market and RWA signals, reasons about risk within your mandate,
           and executes approved rebalances on Casper — every action verifiable onchain.
         </p>

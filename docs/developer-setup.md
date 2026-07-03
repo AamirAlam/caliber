@@ -15,7 +15,7 @@ cargo install cargo-odra casper-client
 ## Bootstrap
 
 ```bash
-git clone <repo> && cd helm
+git clone <repo> && cd caliber
 pnpm install
 cp apps/web/.env.example apps/web/.env.local
 cp apps/services/.env.example apps/services/.env
@@ -37,8 +37,8 @@ cp packages/contracts/.env.example packages/contracts/.env
 ## Run pieces individually
 
 ```bash
-pnpm --filter @helm/web dev          # frontend on :3000
-pnpm --filter @helm/services dev     # agent loop
-pnpm --filter @helm/services run:once # single loop, prints JSON
-pnpm --filter @helm/contracts test   # contract tests
+pnpm --filter @caliber/web dev          # frontend on :3000
+pnpm --filter @caliber/services dev     # agent loop
+pnpm --filter @caliber/services run:once # single loop, prints JSON
+pnpm --filter @caliber/contracts test   # contract tests
 ```

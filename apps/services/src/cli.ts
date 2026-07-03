@@ -30,7 +30,7 @@ async function main(): Promise<void> {
 
   let approval;
   if (state.pendingRun) {
-    approval = await executeApproved(deps, state.pendingRun.runId, 'demo@helm');
+    approval = await executeApproved(deps, state.pendingRun.runId, 'demo@caliber');
   }
 
   // eslint-disable-next-line no-console

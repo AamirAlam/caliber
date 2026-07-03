@@ -1,6 +1,6 @@
 # Architecture
 
-Helm is a policy-driven AI treasury control plane for tokenized real-world
+Caliber is a policy-driven AI treasury control plane for tokenized real-world
 assets (RWAs), built on Casper. It separates **deterministic guardrails** from
 **agentic reasoning** so autonomy stays safe near a treasury.
 
@@ -36,12 +36,12 @@ collect signals → score risk → evaluate policy → generate decision
 
 ## On-chain anchor
 
-`packages/contracts` exposes the `HelmVault` contract. Its `record_rebalance`
+`packages/contracts` exposes the `CaliberVault` contract. Its `record_rebalance`
 entry point is the transaction-producing component: approved decisions are
 anchored on Casper, emitting `RebalanceRecorded` audit events.
 
 ## Data model
 
-All packages share one model defined as Zod schemas in `@helm/shared`:
+All packages share one model defined as Zod schemas in `@caliber/shared`:
 treasury policy, asset allocation, signal snapshot, risk score, recommendation,
 rebalance request, transaction record, agent run log.

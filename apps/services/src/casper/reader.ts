@@ -1,4 +1,7 @@
-// casper-js-sdk is CommonJS with everything on the default export.
+// Reads are done over plain JSON-RPC (fetch) rather than casper-js-sdk's RPC
+// client: the SDK serializes requests with typedjson, which breaks under
+// `tsx watch` (HMR re-registers classes and the decorator metadata mismatches).
+// We only borrow the SDK's pure `byteHash` (blake2b) for the storage-key derivation.
 import casper from 'casper-js-sdk';
 import { config } from '../config.js';
 import { log } from '../logger.js';
@@ -12,16 +15,12 @@ export interface VaultState {
 /**
  * Odra stores every module `Var` in a single "state" dictionary, keyed by
  * hex(blake2b256(big-endian u32 field index)). Fields are numbered in
- * declaration order starting at 1 (index 0 is reserved): for HelmVault that is
+ * declaration order starting at 1 (index 0 is reserved): for CaliberVault that is
  * owner=1, policy_ref=2, policy_version=3, paused=4, rebalance_count=5.
  */
 const FIELD_INDEX = { paused: 4, rebalanceCount: 5 } as const;
 
 let resolved: { contractHash: string; stateUref: string } | null = null;
-
-function client() {
-  return new casper.RpcClient(new casper.HttpHandler(config.casper.rpcUrl));
-}
 
 /** Dictionary item key for a field index. */
 function itemKey(index: number): string {
@@ -29,8 +28,16 @@ function itemKey(index: number): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function storedValue(raw: any): any {
-  return raw?.stored_value ?? raw?.result?.stored_value ?? raw?.StoredValue;
+async function rpc(method: string, params: unknown): Promise<any> {
+  const res = await fetch(config.casper.rpcUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  });
+  if (!res.ok) throw new Error(`rpc ${method} http ${res.status}`);
+  const json = (await res.json()) as { result?: unknown; error?: { message: string } };
+  if (json.error) throw new Error(`rpc ${method}: ${json.error.message}`);
+  return json.result;
 }
 
 /** Decode Odra's stored bytes (a `Vec<u8>` CLValue: 4-byte LE length + payload). */
@@ -47,16 +54,23 @@ function parseBool(bytesHex: string): boolean {
 }
 
 /** Resolve (and cache) the contract hash + state dictionary uref from the package. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function resolveState(rpc: any, srh: string, pkgHex: string) {
+async function resolveState(srh: string, pkgHex: string) {
   if (resolved) return resolved;
-  const pkg = await rpc.queryGlobalStateByStateHash(srh, `hash-${pkgHex}`, []);
-  const versions = storedValue(pkg.rawJSON)?.ContractPackage?.versions ?? [];
+  const pkg = await rpc('query_global_state', {
+    state_identifier: { StateRootHash: srh },
+    key: `hash-${pkgHex}`,
+    path: [],
+  });
+  const versions = pkg?.stored_value?.ContractPackage?.versions ?? [];
   const contractHash: string | undefined = versions[versions.length - 1]?.contract_hash;
   if (!contractHash) throw new Error('no contract version found for package');
   const cHex = contractHash.replace(/^contract-/, '');
-  const contract = await rpc.queryGlobalStateByStateHash(srh, `hash-${cHex}`, []);
-  const stateKey = (storedValue(contract.rawJSON)?.Contract?.named_keys ?? []).find(
+  const contract = await rpc('query_global_state', {
+    state_identifier: { StateRootHash: srh },
+    key: `hash-${cHex}`,
+    path: [],
+  });
+  const stateKey = (contract?.stored_value?.Contract?.named_keys ?? []).find(
     (k: { name: string }) => k.name === 'state',
   );
   if (!stateKey?.key) throw new Error('no "state" named key on contract');
@@ -77,12 +91,14 @@ export async function readVaultState(): Promise<VaultState> {
   };
   if (!config.casper.vaultContractHash) return fallback;
   try {
-    const rpc = client();
-    const srh = (await rpc.getStateRootHashLatest()).stateRootHash.toHex();
-    const { stateUref } = await resolveState(rpc, srh, config.casper.vaultContractHash);
+    const srh: string = (await rpc('chain_get_state_root_hash', {})).state_root_hash;
+    const { stateUref } = await resolveState(srh, config.casper.vaultContractHash);
     const read = async (index: number): Promise<string | undefined> => {
-      const res = await rpc.getDictionaryItem(srh, stateUref, itemKey(index));
-      return storedValue(res.rawJSON)?.CLValue?.bytes;
+      const r = await rpc('state_get_dictionary_item', {
+        state_root_hash: srh,
+        dictionary_identifier: { URef: { seed_uref: stateUref, dictionary_item_key: itemKey(index) } },
+      });
+      return r?.stored_value?.CLValue?.bytes;
     };
     const [rc, pz] = await Promise.all([read(FIELD_INDEX.rebalanceCount), read(FIELD_INDEX.paused)]);
     return {

@@ -1,5 +1,5 @@
 {
-  "name": "@helm/shared",
+  "name": "@caliber/shared",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -20,7 +20,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@helm/config": "workspace:*",
+    "@caliber/config": "workspace:*",
     "eslint": "^9.9.0",
     "typescript": "^5.5.4",
     "vitest": "^2.0.5"

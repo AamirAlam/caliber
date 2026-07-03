@@ -9,7 +9,7 @@ import { Scheduler } from './scheduler/index.js';
 import { AppState } from './state.js';
 
 /**
- * Entry point for the Helm off-chain agent: boots app state, the audit store,
+ * Entry point for the Caliber off-chain agent: boots app state, the audit store,
  * the scheduler (phase-1 loop), and the HTTP API the dashboard consumes.
  */
 async function main(): Promise<void> {
@@ -20,7 +20,7 @@ async function main(): Promise<void> {
 
   const server = buildServer(deps, scheduler);
   await server.listen({ port: config.api.port, host: '0.0.0.0' });
-  log.info('helm api listening', { port: config.api.port });
+  log.info('caliber api listening', { port: config.api.port });
 
   scheduler.start();
 

@@ -1,6 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import type { RiskScore, SignalSnapshot, TreasuryPolicy } from '@helm/shared';
+import type { RiskScore, SignalSnapshot, TreasuryPolicy } from '@caliber/shared';
 import { evaluatePolicy } from '../policy/index.js';
 import { buildRebalanceFromLegs, proposeRebalance } from '../decision/index.js';
 import type { VaultState } from '../casper/reader.js';

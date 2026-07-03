@@ -1,6 +1,6 @@
-# @helm/contracts — Casper treasury vault (Odra)
+# @caliber/contracts — Casper treasury vault (Odra)
 
-The on-chain anchor of Helm. The `HelmVault` contract stores the active policy
+The on-chain anchor of Caliber. The `CaliberVault` contract stores the active policy
 reference, records approved rebalances, supports pause/resume and owner-gated
 access control, and emits audit events.
 
@@ -33,8 +33,8 @@ cargo install cargo-odra        # https://odra.dev
 ## Develop
 
 ```bash
-pnpm --filter @helm/contracts build   # cargo odra build  → wasm/HelmVault.wasm
-pnpm --filter @helm/contracts test    # cargo odra test   (in-memory OdraVM)
+pnpm --filter @caliber/contracts build   # cargo odra build  → wasm/CaliberVault.wasm
+pnpm --filter @caliber/contracts test    # cargo odra test   (in-memory OdraVM)
 ```
 
 Tests cover record-rebalance (count + event), the paused guard, and owner
@@ -48,12 +48,12 @@ access control. All five pass on the OdraVM with no network.
    # fund the public key at https://testnet.cspr.live/tools/faucet
    ```
 2. `cp .env.example .env` and set the `ODRA_CASPER_LIVENET_*` values.
-3. `pnpm --filter @helm/contracts deploy:testnet`
-   — builds the wasm and runs `bin/helm_vault_on_livenet.rs` (`--features livenet`),
+3. `pnpm --filter @caliber/contracts deploy:testnet`
+   — builds the wasm and runs `bin/caliber_vault_on_livenet.rs` (`--features livenet`),
    which submits the install deploy and **prints the contract package hash**.
-4. Copy that hash into `apps/services/.env` (`HELM_VAULT_CONTRACT_HASH`) and
+4. Copy that hash into `apps/services/.env` (`CALIBER_VAULT_CONTRACT_HASH`) and
    `apps/web/.env.local` (`NEXT_PUBLIC_VAULT_CONTRACT_HASH`), then set
-   `HELM_DRY_RUN=false` to submit real rebalances.
+   `CALIBER_DRY_RUN=false` to submit real rebalances.
 
 > Alternative: the Casper MCP server and the `cspr-click` agent skill can also
 > build, sign, and submit deploys via natural language.

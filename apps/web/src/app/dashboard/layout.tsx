@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { HelmMark } from '@/components/SiteHeader';
+import { CaliberMark } from '@/components/SiteHeader';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
 const nav = [
@@ -23,8 +23,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           href="/"
           className="flex h-16 items-center gap-2.5 border-b border-slate-900/[0.06] px-6"
         >
-          <HelmMark />
-          <span className="text-[0.95rem] font-semibold tracking-tightish text-ink-900">Helm</span>
+          <CaliberMark />
+          <span className="text-[0.95rem] font-semibold tracking-tightish text-ink-900">Caliber</span>
         </Link>
         <nav className="flex flex-col gap-0.5 p-3">
           {nav.map((item) => {
@@ -56,7 +56,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               casper-testnet
             </span>
             <p className="mt-1.5 leading-relaxed">
-              HelmVault deployed. Approvals submit real on-chain deploys.
+              CaliberVault deployed. Approvals submit real on-chain deploys.
             </p>
           </div>
         </div>
@@ -66,8 +66,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Mobile top bar */}
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-900/[0.06] bg-canvas/85 px-4 backdrop-blur-xl lg:hidden">
           <Link href="/" className="flex items-center gap-2.5">
-            <HelmMark />
-            <span className="text-[0.95rem] font-semibold tracking-tightish text-ink-900">Helm</span>
+            <CaliberMark />
+            <span className="text-[0.95rem] font-semibold tracking-tightish text-ink-900">Caliber</span>
           </Link>
           <ThemeToggle />
         </header>

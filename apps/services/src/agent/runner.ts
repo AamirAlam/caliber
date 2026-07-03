@@ -1,6 +1,6 @@
 import { generateText, tool } from 'ai';
 import { z } from 'zod';
-import type { Recommendation } from '@helm/shared';
+import type { Recommendation } from '@caliber/shared';
 import {
   buildRebalanceFromLegs,
   buildRecommendation,
@@ -16,7 +16,7 @@ import { getCasperMcpTools } from './mcp.js';
 import { reviewProposal } from './reviewer.js';
 import { buildTools, legSchema, type VaultState } from './tools.js';
 
-const PROPOSER_SYSTEM = `You are Helm, an autonomous treasury agent for tokenized real-world assets.
+const PROPOSER_SYSTEM = `You are Caliber, an autonomous treasury agent for tokenized real-world assets.
 You decide what to do THIS cycle: hold, rebalance, or halt. Work the tools:
 1. read the signals, policy, and current risk;
 2. reason about whether the treasury is within its mandate;

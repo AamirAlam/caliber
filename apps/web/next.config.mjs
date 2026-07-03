@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@helm/shared'],
+  transpilePackages: ['@caliber/shared'],
 };
 
 export default nextConfig;

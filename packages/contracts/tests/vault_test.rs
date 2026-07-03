@@ -1,15 +1,15 @@
-//! Contract tests for HelmVault, run against Odra's in-memory test backend.
+//! Contract tests for CaliberVault, run against Odra's in-memory test backend.
 //! Run with: `cargo odra test`
 
-use helm_contracts::vault::{Error, HelmVault, HelmVaultHostRef, HelmVaultInitArgs, RebalanceRecorded};
+use caliber_contracts::vault::{Error, CaliberVault, CaliberVaultHostRef, CaliberVaultInitArgs, RebalanceRecorded};
 use odra::host::{Deployer, HostEnv};
 
-fn deploy() -> (HostEnv, HelmVaultHostRef) {
+fn deploy() -> (HostEnv, CaliberVaultHostRef) {
     let env = odra_test::env();
     let owner = env.get_account(0);
     env.set_caller(owner);
     let contract =
-        HelmVault::deploy(&env, HelmVaultInitArgs { owner, policy_ref: "policy:demo".to_string() });
+        CaliberVault::deploy(&env, CaliberVaultInitArgs { owner, policy_ref: "policy:demo".to_string() });
     (env, contract)
 }
 

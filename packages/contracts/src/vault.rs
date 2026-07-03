@@ -1,6 +1,6 @@
-//! Helm treasury-vault contract (Odra).
+//! Caliber treasury-vault contract (Odra).
 //!
-//! HelmVault is the on-chain anchor of Helm: it stores a reference to the active
+//! CaliberVault is the on-chain anchor of Caliber: it stores a reference to the active
 //! treasury policy and records every approved rebalance decision, emitting an
 //! audit event each time. `record_rebalance` is the transaction-producing entry
 //! point the off-chain agent calls after deterministic policy checks and human
@@ -32,7 +32,7 @@ pub enum Error {
 }
 
 #[odra::module(events = [RebalanceRecorded, PausedSet], errors = Error)]
-pub struct HelmVault {
+pub struct CaliberVault {
     /// Owner account permitted to administer the vault (access control).
     owner: Var<Address>,
     /// Hash/reference of the active treasury policy.
@@ -46,7 +46,7 @@ pub struct HelmVault {
 }
 
 #[odra::module]
-impl HelmVault {
+impl CaliberVault {
     /// One-time constructor: set the owner and initial policy reference.
     pub fn init(&mut self, owner: Address, policy_ref: String) {
         self.owner.set(owner);

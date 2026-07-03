@@ -1,4 +1,4 @@
-import type { RebalanceRequest, RiskScore, SignalSnapshot, TreasuryPolicy } from '@helm/shared';
+import type { RebalanceRequest, RiskScore, SignalSnapshot, TreasuryPolicy } from '@caliber/shared';
 import {
   deriveAllocations,
   getSignal,
