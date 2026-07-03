@@ -138,14 +138,6 @@ Copy the env templates (done by `scripts/setup.sh`) and fill in as needed:
 `is_paused` · `rebalance_count` · `policy_version`. Owner-gated; emits
 `RebalanceRecorded` / `PausedSet`. Deploy guide: [`docs/contract-deployment.md`](docs/contract-deployment.md).
 
-## Hackathon submission checklist
-
-- [x] Vault contract deployed to Casper testnet
-- [x] Transaction-producing on-chain action (`record_rebalance`)
-- [x] Public, open-source repo with this README
-- [x] Original code and content only
-- [ ] Demo video
-
 ## License
 
 MIT
