@@ -1,10 +1,10 @@
 const steps = [
-  { n: '01', title: 'Collect signals', body: 'Market rates, RWA issuer feeds, on-chain liquidity, and redemption queues are gathered into a timestamped snapshot.' },
-  { n: '02', title: 'Score risk', body: 'A deterministic model turns the snapshot into a 0–100 risk score with a per-factor breakdown — fully explainable.' },
-  { n: '03', title: 'Evaluate policy', body: 'The proposed move is checked against allocation bands, liquidity buffers, and risk ceilings. Violations block action.' },
-  { n: '04', title: 'Decide & explain', body: 'Caliber chooses hold, rebalance, or halt, and writes a plain-language rationale alongside the machine verdict.' },
-  { n: '05', title: 'Approve & execute', body: 'Compliant rebalances are submitted to Casper as on-chain deploys — optionally behind a human approval gate.' },
-  { n: '06', title: 'Audit', body: 'Every signal, decision, rationale, and transaction hash is recorded as an append-only run log.' },
+  { n: '01', title: 'Collect signals', body: 'Market, RWA, and on-chain liquidity into one snapshot.' },
+  { n: '02', title: 'Score risk', body: 'A 0–100 score with an explainable per-factor breakdown.' },
+  { n: '03', title: 'Evaluate policy', body: 'Bands, buffers, and risk ceilings — violations block action.' },
+  { n: '04', title: 'Decide & explain', body: 'Hold, rebalance, or halt, with a plain-language rationale.' },
+  { n: '05', title: 'Approve & execute', body: 'Compliant moves settle on Casper behind a human gate.' },
+  { n: '06', title: 'Audit', body: 'Every decision and deploy hash, append-only.' },
 ];
 
 export function HowItWorks() {

@@ -1,8 +1,8 @@
 const rails = [
-  { title: 'Deterministic policy, not vibes', body: 'Allocation bands, liquidity floors, and risk ceilings are enforced in code. The AI explains decisions; it never overrides the rules.' },
-  { title: 'Human-in-the-loop', body: 'Policies can require explicit approval before any deploy is submitted. Nothing moves on-chain silently.' },
-  { title: 'Pause & access control', body: 'The on-chain vault supports pause/resume and owner-gated entry points, so control is enforced at the contract layer too.' },
-  { title: 'Verifiable audit trail', body: 'Each run records its signals, rationale, and the resulting Casper deploy hash — reviewable on-chain and off.' },
+  { title: 'Deterministic policy, not vibes', body: 'Bands, floors, and ceilings enforced in code. The AI explains; it never overrides.' },
+  { title: 'Human-in-the-loop', body: 'Approval required before any deploy. Nothing moves on-chain silently.' },
+  { title: 'Pause & access control', body: 'Owner-gated entry points and pause/resume, enforced at the contract layer.' },
+  { title: 'Verifiable audit trail', body: 'Every run records its rationale and Casper deploy hash — on-chain and off.' },
 ];
 
 export function Guardrails() {

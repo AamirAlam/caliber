@@ -214,6 +214,33 @@ body {
   stroke: #232c3f;
 }
 
+/* ─── Funds-flow band (landing hero visual) ──────────────────────── */
+.ai-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ai-pulse 2.6s ease-in-out infinite;
+}
+@keyframes ai-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-pulse {
+    animation: none;
+    opacity: 0.3;
+  }
+  .flow-dot {
+    display: none;
+  }
+}
+
 /* ─── Animated flow timeline (Architecture) ──────────────────────── */
 .flow-track {
   position: absolute;

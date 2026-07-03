@@ -34,20 +34,20 @@ export function SiteHeader() {
 }
 
 export function CaliberMark({ className = '' }: { className?: string }) {
-  // A ship's-wheel inspired mark — steering, control, calm.
+  // A precision aperture: an open ring (reads as a "C" and a caliber bore/gauge)
+  // with a center pupil — calibration and focus.
   return (
     <span
       className={`flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500 shadow-soft ${className}`}
     >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden>
-        <circle cx="12" cy="12" r="9" stroke="white" strokeWidth="1.7" />
-        <circle cx="12" cy="12" r="2.6" stroke="white" strokeWidth="1.7" />
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden>
         <path
-          d="M12 3v6M12 15v6M3 12h6M15 12h6"
+          d="M17.9 7.9 A7.2 7.2 0 1 1 17.9 16.1"
           stroke="white"
-          strokeWidth="1.7"
+          strokeWidth="2.2"
           strokeLinecap="round"
         />
+        <circle cx="12" cy="12" r="2.4" fill="white" />
       </svg>
     </span>
   );
