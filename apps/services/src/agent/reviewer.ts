@@ -1,10 +1,11 @@
 import { generateObject } from 'ai';
 import type { LanguageModelV1 } from 'ai';
-import { AgentReviewSchema } from '@caliber/shared';
+import { AGENT_ROLES, AgentReviewSchema } from '@caliber/shared';
 import type { AgentReview, RebalanceRequest, RiskScore, TreasuryPolicy } from '@caliber/shared';
 import { log } from '../logger.js';
 
-const REVIEWER_SYSTEM = `You are Caliber's Risk Officer — an adversarial reviewer, independent of the agent that proposed this move.
+const REVIEWER_SYSTEM = `You are the ${AGENT_ROLES.reviewer.name} on Caliber's treasury team — an adversarial reviewer,
+independent of the ${AGENT_ROLES.proposer.name} that designed this move.
 Your job is to catch bad rebalances before a human ever sees them. Approve only if the move is clearly justified by the risk
 picture and consistent with a conservative treasury mandate. Veto (approved=false) if the move looks unjustified, oversized for
 the risk, or could increase exposure. Be skeptical; when unsure, veto with a clear concern. You cannot approve anything the

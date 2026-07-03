@@ -14,7 +14,7 @@ const pillars = [
   },
   {
     title: 'Agentic reasoning',
-    body: 'A proposer agent designs the move; an adversarial reviewer signs off.',
+    body: 'A Proposer designs the move; a Risk Officer signs off or vetoes.',
     icon: (
       <>
         <circle cx="12" cy="12" r="3.4" stroke="#3657d5" strokeWidth="1.8" />

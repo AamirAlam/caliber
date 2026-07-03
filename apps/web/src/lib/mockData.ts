@@ -60,6 +60,11 @@ export const demoRecommendation: Recommendation = {
     'Holding. Risk is moderate (29/100) and allocations are within target bands. The liquidity buffer is comfortably above the 20% floor, so no rebalance is warranted this cycle.',
   confidence: 0.8,
   agentProposed: true,
+  trace: [
+    { step: 0, kind: 'tools', label: 'Investigated (attempt 1)', detail: 'get_signals, get_policy, score_risk, evaluate_policy' },
+    { step: 1, kind: 'proposal', label: 'Proposer · attempt 1', detail: 'Proposed hold', ok: true },
+    { step: 2, kind: 'decision', label: 'HOLD', ok: true },
+  ],
   createdAt: '2026-06-23T09:00:02.000Z',
 };
 

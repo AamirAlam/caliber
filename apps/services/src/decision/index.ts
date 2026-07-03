@@ -4,6 +4,7 @@ import type {
   Recommendation,
   RiskScore,
   SignalSnapshot,
+  TraceStep,
   TreasuryPolicy,
 } from '@caliber/shared';
 import { evaluatePolicy, type PolicyViolation } from '../policy/index.js';
@@ -108,7 +109,7 @@ export function buildRecommendation(
   input: DecisionInput,
   decision: Decision,
   explanation: string,
-  extra?: { agentProposed?: boolean; review?: AgentReview },
+  extra?: { agentProposed?: boolean; review?: AgentReview; trace?: TraceStep[] },
 ): Recommendation {
   return {
     id: `rec_${input.runId}`,
@@ -122,6 +123,7 @@ export function buildRecommendation(
     confidence: decision.compliancePassed ? 0.85 : 0.95,
     agentProposed: extra?.agentProposed ?? false,
     review: extra?.review,
+    trace: extra?.trace ?? [],
     createdAt: new Date().toISOString(),
   };
 }

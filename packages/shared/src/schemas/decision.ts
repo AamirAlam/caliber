@@ -33,6 +33,20 @@ export const AgentReviewSchema = z.object({
 });
 
 /**
+ * One entry in the run's deliberation trace — the intermediate reasoning chain
+ * (proposer turns, tools used, the deterministic gate verdict, the reviewer
+ * verdict, revisions, and the final decision). Persisted for auditability.
+ */
+export const TraceStepSchema = z.object({
+  step: z.number().int().nonnegative(),
+  kind: z.enum(['proposal', 'tools', 'gate', 'review', 'revision', 'decision', 'fallback']),
+  label: z.string(),
+  detail: z.string().optional(),
+  /** true = passed/approved, false = failed/vetoed, undefined = informational. */
+  ok: z.boolean().optional(),
+});
+
+/**
  * The agent's output for one run. Deterministic policy checks live in
  * `compliancePassed`/`violations`; the AI-authored prose lives in
  * `explanation` and never gates execution on its own.
@@ -60,5 +74,7 @@ export const RecommendationSchema = z.object({
   agentProposed: z.boolean().default(false),
   /** Verdict from the adversarial Risk-Reviewer agent, when one ran. */
   review: AgentReviewSchema.optional(),
+  /** The deliberation trace — the intermediate reasoning chain for this run. */
+  trace: z.array(TraceStepSchema).default([]),
   createdAt: z.string().datetime(),
 });

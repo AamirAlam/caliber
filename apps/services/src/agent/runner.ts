@@ -1,6 +1,14 @@
 import { generateText, tool, type LanguageModelV1 } from 'ai';
 import { z } from 'zod';
-import type { AgentReview, RebalanceRequest, Recommendation, RiskScore, TreasuryPolicy } from '@caliber/shared';
+import {
+  AGENT_ROLES,
+  type AgentReview,
+  type RebalanceRequest,
+  type Recommendation,
+  type RiskScore,
+  type TraceStep,
+  type TreasuryPolicy,
+} from '@caliber/shared';
 import {
   buildRebalanceFromLegs,
   buildRecommendation,
@@ -17,8 +25,9 @@ import { getCasperMcpTools } from './mcp.js';
 import { reviewProposal } from './reviewer.js';
 import { buildTools, legSchema, type VaultState } from './tools.js';
 
-const PROPOSER_SYSTEM = `You are Caliber, an autonomous treasury agent for tokenized real-world assets.
-You decide what to do THIS cycle: hold, rebalance, or halt. Work the tools:
+const PROPOSER_SYSTEM = `You are the ${AGENT_ROLES.proposer.name}, the ${AGENT_ROLES.proposer.title.toLowerCase()} on Caliber's
+treasury team for tokenized real-world assets. You work alongside the ${AGENT_ROLES.reviewer.name}, who will independently
+review any move you propose. You decide what to do THIS cycle: hold, rebalance, or halt. Work the tools:
 1. read the signals, policy, and current risk;
 2. reason about whether the treasury is within its mandate;
 3. if a move is warranted, design a de-risking rebalance — choose which assets to trim and the sizing yourself —
@@ -68,8 +77,12 @@ export async function generateRecommendation(
 
   if (!model) {
     const decision = decideAction(input);
+    const trace: TraceStep[] = [
+      { step: 0, kind: 'fallback', label: 'Deterministic engine', detail: 'No LLM configured; rule-based decision' },
+      { step: 1, kind: 'decision', label: decision.action.toUpperCase(), ok: decision.compliancePassed },
+    ];
     return {
-      recommendation: buildRecommendation(input, decision, fallbackExplanation(input, decision)),
+      recommendation: buildRecommendation(input, decision, fallbackExplanation(input, decision), { trace }),
       toolTrace: ['fallback:no-llm'],
     };
   }
@@ -109,43 +122,68 @@ export async function runDeliberation(
 ): Promise<AgentResult> {
   const { policy, risk, snapshot } = input;
   const toolTrace: string[] = [];
+  const steps: TraceStep[] = [];
+  const add = (s: Omit<TraceStep, 'step'>) => steps.push({ step: steps.length, ...s });
   let lastReview: AgentReview | undefined;
   let feedback: string | undefined;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const isLast = attempt === MAX_ATTEMPTS - 1;
+    const turn = attempt + 1;
     const { commit, trace } = await propose(feedback);
     toolTrace.push(...trace);
 
+    if (trace.length) {
+      const used = [...new Set(trace.filter((t) => t !== 'commit_decision'))];
+      if (used.length) add({ kind: 'tools', label: `Investigated (attempt ${turn})`, detail: used.join(', ') });
+    }
     if (!commit) break; // nothing committed → deterministic fallback
     const rationale = commit.rationale?.trim() || 'Decision committed by the agent.';
+    add({ kind: 'proposal', label: `${AGENT_ROLES.proposer.name} · attempt ${turn}`, detail: `Proposed ${commit.action}`, ok: true });
 
     // Non-rebalance decisions are accepted directly (hold re-validated for compliance).
     if (commit.action !== 'rebalance') {
       const violations = commit.action === 'hold' ? evaluatePolicy(policy, risk, snapshot) : [];
-      return result(input, { action: commit.action, compliancePassed: violations.length === 0, violations }, rationale, toolTrace, { review: lastReview });
+      add({ kind: 'decision', label: commit.action.toUpperCase(), ok: violations.length === 0 });
+      return result(input, { action: commit.action, compliancePassed: violations.length === 0, violations }, rationale, toolTrace, { review: lastReview, trace: steps });
     }
 
     // Rebalance → deterministic gate.
     const legs = commit.legs ?? [];
     const gateViolations = gateRebalance(input, legs);
+    add({
+      kind: 'gate',
+      label: 'Policy gate',
+      ok: gateViolations.length === 0,
+      detail: gateViolations.length === 0 ? 'Passed all constraints' : detail(gateViolations),
+    });
     if (gateViolations.length > 0) {
       if (!isLast) {
         feedback = `Your proposed rebalance failed the policy gate: ${detail(gateViolations)}. Revise it to satisfy every constraint, or hold.`;
         toolTrace.push('gate_reject', 'revise');
+        add({ kind: 'revision', label: 'Sent back for revision', detail: 'Gate rejected the proposal' });
         continue;
       }
-      return halt(input, gateViolations, rationale, lastReview, toolTrace);
+      add({ kind: 'decision', label: 'HALT', detail: 'No compliant move after revision', ok: false });
+      return halt(input, gateViolations, rationale, lastReview, toolTrace, steps);
     }
 
     // Passed the gate → adversarial Risk-Reviewer.
     const rebalance = buildRebalanceFromLegs(policy, input.runId, legs);
     lastReview = await review({ policy, risk, rebalance, rationale });
     toolTrace.push('risk_review');
+    add({
+      kind: 'review',
+      label: AGENT_ROLES.reviewer.name,
+      ok: lastReview.approved,
+      detail: `${lastReview.approved ? 'Approved' : `Vetoed (${lastReview.severity})`} — ${lastReview.concern}`,
+    });
 
     if (lastReview.approved) {
+      add({ kind: 'decision', label: 'REBALANCE', detail: 'Approved & ready for human sign-off', ok: true });
       return result(input, { action: 'rebalance', compliancePassed: true, violations: [], rebalance }, rationale, toolTrace, {
         review: lastReview,
+        trace: steps,
       });
     }
 
@@ -153,15 +191,19 @@ export async function runDeliberation(
     if (!isLast) {
       feedback = `The risk officer vetoed your move (${lastReview.severity} severity): ${lastReview.concern}. Propose a safer, smaller move that addresses this, or hold.`;
       toolTrace.push('revise');
+      add({ kind: 'revision', label: 'Sent back for revision', detail: `${AGENT_ROLES.reviewer.name} vetoed` });
       continue;
     }
-    return halt(input, [{ constraint: 'riskReviewVeto', detail: lastReview.concern }], rationale, lastReview, toolTrace);
+    add({ kind: 'decision', label: 'HALT', detail: 'Reviewer vetoed both attempts', ok: false });
+    return halt(input, [{ constraint: 'riskReviewVeto', detail: lastReview.concern }], rationale, lastReview, toolTrace, steps);
   }
 
   const decision = decideAction(input);
+  add({ kind: 'fallback', label: 'Deterministic engine', detail: 'Agent unavailable; used rule-based decision' });
   return {
     recommendation: buildRecommendation(input, decision, fallbackExplanation(input, decision), {
       agentProposed: false,
+      trace: steps,
     }),
     toolTrace: [...toolTrace, 'fallback:no-commit'],
   };
@@ -232,10 +274,14 @@ function result(
   decision: Decision,
   rationale: string,
   toolTrace: string[],
-  extra: { review?: AgentReview },
+  extra: { review?: AgentReview; trace: TraceStep[] },
 ): AgentResult {
   return {
-    recommendation: buildRecommendation(input, decision, rationale, { agentProposed: true, review: extra.review }),
+    recommendation: buildRecommendation(input, decision, rationale, {
+      agentProposed: true,
+      review: extra.review,
+      trace: extra.trace,
+    }),
     toolTrace,
   };
 }
@@ -246,6 +292,7 @@ function halt(
   rationale: string,
   review: AgentReview | undefined,
   toolTrace: string[],
+  trace: TraceStep[],
 ): AgentResult {
-  return result(input, { action: 'halt', compliancePassed: false, violations }, rationale, toolTrace, { review });
+  return result(input, { action: 'halt', compliancePassed: false, violations }, rationale, toolTrace, { review, trace });
 }

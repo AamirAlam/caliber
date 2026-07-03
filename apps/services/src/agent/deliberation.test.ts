@@ -54,6 +54,11 @@ describe('runDeliberation — multi-agent self-correction', () => {
     expect(res.recommendation.action).toBe('rebalance');
     expect(res.recommendation.review?.approved).toBe(true);
     expect(res.toolTrace).toContain('revise');
+    // The deliberation trace captures the full chain incl. the revision.
+    const trace = res.recommendation.trace;
+    expect(trace.some((s) => s.kind === 'revision')).toBe(true);
+    expect(trace.filter((s) => s.kind === 'review')).toHaveLength(2);
+    expect(trace.at(-1)?.kind).toBe('decision');
   });
 
   it('halts when the reviewer vetoes both attempts', async () => {

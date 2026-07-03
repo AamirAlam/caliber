@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { AGENT_ROLES } from '@caliber/shared';
 import type { AgentRunLog } from '@caliber/shared';
 import { api, type RunDetail } from '@/lib/api';
 import { demoRuns } from '@/lib/mockData';
@@ -233,9 +234,11 @@ function RunDetailView({
   const rec = detail?.recommendation;
   const legs = rec?.rebalance?.legs ?? [];
   const loading = live && (!detail || detail.run.id !== runId);
+  const trace = rec?.trace ?? [];
 
   return (
-    <div className="disclosure-panel grid gap-6 sm:grid-cols-2">
+    <div className="disclosure-panel space-y-6">
+     <div className="grid gap-6 sm:grid-cols-2">
       {/* Agent reasoning */}
       <div>
         <div className="mb-2 flex items-center gap-2">
@@ -259,7 +262,7 @@ function RunDetailView({
           <p
             className={`mt-3 text-xs ${rec.review.approved ? 'text-signal-emerald' : 'text-signal-rose'}`}
           >
-            Risk reviewer: {rec.review.approved ? 'approved' : 'vetoed'} ({rec.review.severity}) —{' '}
+            {AGENT_ROLES.reviewer.name}: {rec.review.approved ? 'approved' : 'vetoed'} ({rec.review.severity}) —{' '}
             {rec.review.concern}
           </p>
         )}
@@ -316,7 +319,44 @@ function RunDetailView({
           </a>
         )}
       </div>
+     </div>
+
+      {/* Deliberation trace */}
+      {trace.length > 0 && (
+        <div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Deliberation trace
+          </p>
+          <ol className="space-y-2.5">
+            {trace.map((t) => (
+              <li key={t.step} className="flex gap-3">
+                <TraceIcon kind={t.kind} ok={t.ok} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink-900">{t.label}</p>
+                  {t.detail && <p className="text-xs leading-relaxed text-slate-500">{t.detail}</p>}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
     </div>
+  );
+}
+
+function TraceIcon({ kind, ok }: { kind: string; ok?: boolean }) {
+  const tone =
+    ok === false
+      ? 'border-signal-rose/30 bg-rose-50 text-signal-rose'
+      : ok === true
+        ? 'border-signal-emerald/30 bg-emerald-50 text-signal-emerald'
+        : 'border-slate-200 bg-slate-50 text-slate-500';
+  const glyph =
+    kind === 'proposal' ? '◆' : kind === 'gate' ? '⛨' : kind === 'review' ? '⚖' : kind === 'revision' ? '↻' : kind === 'decision' ? '●' : kind === 'tools' ? '⚙' : '·';
+  return (
+    <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs ${tone}`}>
+      {glyph}
+    </span>
   );
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { AGENT_ROLES } from '@caliber/shared';
 import type { Recommendation, RiskScore, SignalSnapshot, TreasuryPolicy } from '@caliber/shared';
 import { api, type VaultState } from '@/lib/api';
 import { demoPolicy, demoRecommendation, demoSignals } from '@/lib/mockData';
@@ -242,7 +243,7 @@ export default function DashboardPage() {
                   </p>
                   <div className="grid gap-2.5 sm:grid-cols-2">
                     <DeliberationStep
-                      role="Proposer agent"
+                      role={AGENT_ROLES.proposer.name}
                       ok
                       note={
                         rec.agentProposed
@@ -251,7 +252,7 @@ export default function DashboardPage() {
                       }
                     />
                     <DeliberationStep
-                      role="Risk reviewer"
+                      role={AGENT_ROLES.reviewer.name}
                       ok={rec.review ? rec.review.approved : true}
                       note={
                         rec.review
