@@ -4,10 +4,15 @@ import type {
   SignalSnapshot,
   TransactionRecord,
 } from '@caliber/shared';
+import { config } from '../config.js';
+import { createKysely, migrate } from '../db.js';
+import { log } from '../logger.js';
+import { SqlAuditStore } from './sql.js';
 
 /**
  * Append-only audit store. The audit trail is what makes Caliber's decisions
- * explainable and reviewable. Back with Postgres/SQLite for production.
+ * explainable and reviewable. Backed by SQLite (dev) or Postgres (production);
+ * falls back to in-memory when no database is configured.
  */
 export interface AuditStore {
   saveSnapshot(snapshot: SignalSnapshot): Promise<void>;
@@ -51,4 +56,20 @@ export class InMemoryAuditStore implements AuditStore {
   async getTransaction(id: string): Promise<TransactionRecord | undefined> {
     return this.transactions.get(id);
   }
+}
+
+/**
+ * Build the configured audit store: SQL-backed (SQLite/Postgres) when a database
+ * is configured, otherwise in-memory. Runs migrations on first connect.
+ */
+export async function createAuditStore(): Promise<AuditStore> {
+  const db = await createKysely();
+  if (!db) {
+    log.info('audit store: in-memory (no database configured)');
+    return new InMemoryAuditStore();
+  }
+  await migrate(db);
+  const target = config.db.kind === 'postgres' ? 'postgres' : config.db.path;
+  log.info('audit store: sql', { backend: config.db.kind, target });
+  return new SqlAuditStore(db);
 }

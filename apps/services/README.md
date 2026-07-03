@@ -19,7 +19,7 @@ Each stage is its own module:
 | `policy/` | **Deterministic** risk scoring + policy constraint evaluation |
 | `decision/` | Picks an action + produces the (AI-authored) explanation |
 | `execution/` | `CasperExecutor` — builds & submits the rebalance deploy |
-| `audit/` | Append-only store of snapshots, recommendations, txs, runs |
+| `audit/` | Persistent store of snapshots, recommendations, txs, runs (SQLite dev / Postgres prod) |
 | `scheduler/` | Runs the loop on an interval |
 | `orchestrator.ts` | Wires the stages together into one run |
 
@@ -30,12 +30,17 @@ execution. The `decision/` layer's natural-language `explanation` is descriptive
 and never overrides a policy verdict. This separation is core to Caliber's
 trust/guardrails story.
 
-## Status
+### Persistence
 
-This is a **scaffold**. Every module exposes its types, interfaces, and function
-signatures, but the bodies are `TODO` stubs (they throw `not implemented`). Fill
-them in module by module — the structure and the boundaries between them are the
-point.
+The audit trail is stored in a database via the `AuditStore` interface:
+
+- **Local dev (default):** SQLite file at `CALIBER_SQLITE_PATH` (`./data/caliber.dev.sqlite`).
+- **Production:** set `CALIBER_DATABASE_URL=postgres://…` and Postgres takes over — same code path (Kysely).
+- **CI / ephemeral:** `CALIBER_DB=memory` uses the in-memory store (no durability).
+
+Tables are created automatically on first connect. The **durable source of truth
+for rebalances is on-chain** (`rebalance_count` + `RebalanceRecorded`); the database
+persists the richer off-chain history (signals, reasoning traces, run logs).
 
 ## Local development
 

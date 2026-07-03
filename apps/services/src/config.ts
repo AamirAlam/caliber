@@ -24,6 +24,20 @@ export const config = {
     intervalMs: Number(process.env.CALIBER_LOOP_INTERVAL_MS ?? '60000'),
     dryRun: (process.env.CALIBER_DRY_RUN ?? 'true') === 'true',
   },
+  db: dbConfig(),
 } as const;
+
+/**
+ * Persistence backend, selected by env:
+ * - `CALIBER_DB=memory` → in-memory (tests/CI; no durability).
+ * - `CALIBER_DATABASE_URL=postgres://…` → Postgres (production).
+ * - otherwise → SQLite file at `CALIBER_SQLITE_PATH` (local dev, the default).
+ */
+function dbConfig() {
+  const url = process.env.CALIBER_DATABASE_URL ?? '';
+  if (process.env.CALIBER_DB === 'memory') return { kind: 'memory' as const };
+  if (/^postgres(ql)?:\/\//.test(url)) return { kind: 'postgres' as const, url };
+  return { kind: 'sqlite' as const, path: process.env.CALIBER_SQLITE_PATH ?? './data/caliber.dev.sqlite' };
+}
 
 export type CaliberConfig = typeof config;

@@ -27,6 +27,12 @@ packages/contracts/wasm/
 **/secret_key*
 keys/
 
+# local database (sqlite dev store)
+data/
+*.sqlite
+*.sqlite-journal
+*.db
+
 # logs
 *.log
 npm-debug.log*

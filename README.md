@@ -79,7 +79,8 @@ explanatory and never overrides the rules. See [`docs/architecture.md`](docs/arc
 | `scripts` | Repo-level helpers |
 
 **Stack:** pnpm workspaces + Turborepo · TypeScript · Next.js + Tailwind CSS ·
-Vercel AI SDK (model-agnostic agents) · casper-js-sdk · Odra (Rust) · ESLint + Prettier.
+Vercel AI SDK (model-agnostic agents) · casper-js-sdk · Odra (Rust) ·
+Kysely + SQLite (dev) / Postgres (prod) · ESLint + Prettier.
 
 ## Quick start
 

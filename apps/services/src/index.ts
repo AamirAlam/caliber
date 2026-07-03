@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { InMemoryAuditStore } from './audit/index.js';
+import { createAuditStore } from './audit/index.js';
 import { buildServer } from './api/server.js';
 import { config } from './config.js';
 import { log } from './logger.js';
@@ -14,7 +14,7 @@ import { AppState } from './state.js';
  */
 async function main(): Promise<void> {
   const state = new AppState(samplePolicy);
-  const audit = new InMemoryAuditStore();
+  const audit = await createAuditStore();
   const deps = defaultDeps(audit, state);
   const scheduler = new Scheduler(deps);
 
