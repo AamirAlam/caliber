@@ -1,12 +1,13 @@
-import { generateText, tool } from 'ai';
+import { generateText, tool, type LanguageModelV1 } from 'ai';
 import { z } from 'zod';
-import type { Recommendation } from '@caliber/shared';
+import type { AgentReview, RebalanceRequest, Recommendation, RiskScore, TreasuryPolicy } from '@caliber/shared';
 import {
   buildRebalanceFromLegs,
   buildRecommendation,
   decideAction,
   fallbackExplanation,
   knownAssetIds,
+  type Decision,
   type DecisionInput,
 } from '../decision/index.js';
 import { evaluatePolicy, type PolicyViolation } from '../policy/index.js';
@@ -28,6 +29,9 @@ final action, legs (for a rebalance), and a concise 2-3 sentence rationale. Do n
 
 const DEFAULT_VAULT_STATE: VaultState = { paused: false, rebalanceCount: 0, contractHash: '' };
 
+/** Max proposer attempts: one initial proposal + one revision after feedback. */
+const MAX_ATTEMPTS = 2;
+
 export interface AgentResult {
   recommendation: Recommendation;
   toolTrace: string[];
@@ -38,16 +42,22 @@ const commitSchema = z.object({
   legs: z.array(legSchema).optional(),
   rationale: z.string(),
 });
-type Commit = z.infer<typeof commitSchema>;
+export type Commit = z.infer<typeof commitSchema>;
+
+/** Produce a Proposer decision (real one calls the LLM); returns the commit + tool trace. */
+export type ProposeFn = (feedback?: string) => Promise<{ commit: Commit | null; trace: string[] }>;
+/** Adversarial review of a compliant rebalance (real one calls the LLM). */
+export type ReviewFn = (args: {
+  policy: TreasuryPolicy;
+  risk: RiskScore;
+  rebalance: RebalanceRequest;
+  rationale: string;
+}) => Promise<AgentReview>;
 
 /**
- * Run the agentic decision for one cycle:
- *   1. Proposer agent decides an action + designs any rebalance (tool-use loop).
- *   2. The deterministic policy engine re-validates the proposal — the hard gate.
- *      A non-compliant or malformed proposal is downgraded to `halt`.
- *   3. For a compliant rebalance, the adversarial Risk-Reviewer agent must sign
- *      off; a veto downgrades to `halt`.
- * Falls back to the fully deterministic decision when no LLM is configured.
+ * Run one cycle's agentic decision. Wires the real LLM Proposer + Risk-Reviewer,
+ * then delegates the multi-agent orchestration to `runDeliberation`. Falls back
+ * to the fully deterministic decision when no LLM is configured or on error.
  */
 export async function generateRecommendation(
   input: DecisionInput,
@@ -55,7 +65,6 @@ export async function generateRecommendation(
 ): Promise<AgentResult> {
   const model = resolveModel();
 
-  // Offline / no-key path: deterministic decision + templated explanation.
   if (!model) {
     const decision = decideAction(input);
     return {
@@ -64,104 +73,176 @@ export async function generateRecommendation(
     };
   }
 
-  const { policy, risk, snapshot, runId } = input;
-  let committed: Commit | null = null;
-  const toolTrace: string[] = [];
-
-  // Optionally connect the Casper MCP Server for richer on-chain reads.
   const mcp = await getCasperMcpTools();
-
   try {
-    const tools = {
-      ...buildTools({ ...input, vaultState }),
-      commit_decision: tool({
-        description:
-          'Commit your final decision for this cycle. Call exactly once, after you have tested any rebalance with evaluate_policy.',
-        parameters: commitSchema,
-        execute: async (c) => {
-          committed = c;
-          return { recorded: true };
-        },
-      }),
-    };
-    // Merge MCP tools (if any) at runtime without widening the typed toolset.
-    Object.assign(tools, mcp.tools);
-
-    const result = await generateText({
-      model,
-      system: PROPOSER_SYSTEM,
-      tools,
-      maxSteps: 10,
-      prompt: `Decide this cycle for the "${policy.name}" treasury. Risk is ${risk.band} (${risk.score}/100). Investigate with the tools, design a compliant move if warranted, then commit_decision.`,
-    });
-    toolTrace.push(...(result.steps ?? []).flatMap((s) => (s.toolCalls ?? []).map((c) => c.toolName)));
+    const propose: ProposeFn = (feedback) => runProposer(model, input, vaultState, mcp.tools, feedback);
+    const review: ReviewFn = (args) => reviewProposal(model, args);
+    return await runDeliberation(input, propose, review);
   } catch (err) {
-    log.warn('proposer agent failed; using deterministic fallback', { err: String(err) });
-  } finally {
-    await mcp.close();
-  }
-
-  // If the agent never committed, fall back to the deterministic engine.
-  if (!committed) {
+    log.warn('deliberation failed; using deterministic fallback', { err: String(err) });
     const decision = decideAction(input);
     return {
       recommendation: buildRecommendation(input, decision, fallbackExplanation(input, decision), {
         agentProposed: false,
       }),
-      toolTrace: [...toolTrace, 'fallback:no-commit'],
+      toolTrace: ['fallback:error'],
     };
+  } finally {
+    await mcp.close();
   }
+}
 
-  const commit: Commit = committed;
-  const rationale = commit.rationale?.trim() || 'Decision committed by the agent.';
+/**
+ * Bounded multi-agent deliberation with self-correction:
+ *   1. Proposer designs an action + any rebalance.
+ *   2. Deterministic policy gate re-validates it (the hard gate).
+ *   3. Risk-Reviewer signs off or vetoes a compliant rebalance.
+ *   4. On a gate rejection OR a veto, the reason is fed back to the Proposer for
+ *      one revision (repeat). Only if the final attempt still fails does it halt.
+ * Provider-agnostic and LLM-free-testable: the Proposer/Reviewer are injected.
+ */
+export async function runDeliberation(
+  input: DecisionInput,
+  propose: ProposeFn,
+  review: ReviewFn,
+): Promise<AgentResult> {
+  const { policy, risk, snapshot } = input;
+  const toolTrace: string[] = [];
+  let lastReview: AgentReview | undefined;
+  let feedback: string | undefined;
 
-  // ── Deterministic gate: re-validate whatever the agent proposed. ──
-  let action = commit.action;
-  let rebalance;
-  let violations: PolicyViolation[] = [];
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const isLast = attempt === MAX_ATTEMPTS - 1;
+    const { commit, trace } = await propose(feedback);
+    toolTrace.push(...trace);
 
-  if (action === 'rebalance') {
+    if (!commit) break; // nothing committed → deterministic fallback
+    const rationale = commit.rationale?.trim() || 'Decision committed by the agent.';
+
+    // Non-rebalance decisions are accepted directly (hold re-validated for compliance).
+    if (commit.action !== 'rebalance') {
+      const violations = commit.action === 'hold' ? evaluatePolicy(policy, risk, snapshot) : [];
+      return result(input, { action: commit.action, compliancePassed: violations.length === 0, violations }, rationale, toolTrace, { review: lastReview });
+    }
+
+    // Rebalance → deterministic gate.
     const legs = commit.legs ?? [];
-    const known = knownAssetIds(policy);
-    const unknown = legs.filter((l) => !known.has(l.fromAssetId) || !known.has(l.toAssetId));
-    rebalance = buildRebalanceFromLegs(policy, runId, legs);
-    violations = evaluatePolicy(policy, risk, snapshot, rebalance);
-    if (legs.length === 0) violations.push({ constraint: 'noLegs', detail: 'Rebalance had no legs.' });
-    for (const u of unknown) {
-      violations.push({ constraint: 'unknownAsset', detail: `Unknown asset ${u.fromAssetId}/${u.toAssetId}.` });
+    const gateViolations = gateRebalance(input, legs);
+    if (gateViolations.length > 0) {
+      if (!isLast) {
+        feedback = `Your proposed rebalance failed the policy gate: ${detail(gateViolations)}. Revise it to satisfy every constraint, or hold.`;
+        toolTrace.push('gate_reject', 'revise');
+        continue;
+      }
+      return halt(input, gateViolations, rationale, lastReview, toolTrace);
     }
-    if (violations.length > 0) {
-      // The gate wins over the agent.
-      action = 'halt';
-      rebalance = undefined;
-    }
-  } else if (action === 'hold') {
-    violations = evaluatePolicy(policy, risk, snapshot);
-  }
 
-  let compliancePassed = violations.length === 0;
-  let review;
-
-  // ── Adversarial review of a compliant rebalance. ──
-  if (action === 'rebalance' && rebalance) {
-    review = await reviewProposal(model, { policy, risk, rebalance, rationale });
+    // Passed the gate → adversarial Risk-Reviewer.
+    const rebalance = buildRebalanceFromLegs(policy, input.runId, legs);
+    lastReview = await review({ policy, risk, rebalance, rationale });
     toolTrace.push('risk_review');
-    if (!review.approved) {
-      action = 'halt';
-      rebalance = undefined;
-      compliancePassed = false;
-      violations = [
-        ...violations,
-        { constraint: 'riskReviewVeto', detail: review.concern },
-      ];
+
+    if (lastReview.approved) {
+      return result(input, { action: 'rebalance', compliancePassed: true, violations: [], rebalance }, rationale, toolTrace, {
+        review: lastReview,
+      });
     }
+
+    // Vetoed → revise, or halt on the final attempt.
+    if (!isLast) {
+      feedback = `The risk officer vetoed your move (${lastReview.severity} severity): ${lastReview.concern}. Propose a safer, smaller move that addresses this, or hold.`;
+      toolTrace.push('revise');
+      continue;
+    }
+    return halt(input, [{ constraint: 'riskReviewVeto', detail: lastReview.concern }], rationale, lastReview, toolTrace);
   }
 
-  const recommendation = buildRecommendation(
-    input,
-    { action, compliancePassed, violations, rebalance },
-    rationale,
-    { agentProposed: true, review },
-  );
-  return { recommendation, toolTrace };
+  const decision = decideAction(input);
+  return {
+    recommendation: buildRecommendation(input, decision, fallbackExplanation(input, decision), {
+      agentProposed: false,
+    }),
+    toolTrace: [...toolTrace, 'fallback:no-commit'],
+  };
+}
+
+/** One Proposer turn against the real LLM. */
+async function runProposer(
+  model: LanguageModelV1,
+  input: DecisionInput,
+  vaultState: VaultState,
+  mcpTools: Record<string, unknown>,
+  feedback?: string,
+): Promise<{ commit: Commit | null; trace: string[] }> {
+  const { policy, risk } = input;
+  let committed: Commit | null = null;
+
+  const tools = {
+    ...buildTools({ ...input, vaultState }),
+    commit_decision: tool({
+      description:
+        'Commit your final decision for this cycle. Call exactly once, after you have tested any rebalance with evaluate_policy.',
+      parameters: commitSchema,
+      execute: async (c) => {
+        committed = c;
+        return { recorded: true };
+      },
+    }),
+  };
+  Object.assign(tools, mcpTools);
+
+  const revision = feedback ? `\n\nThis is a revision. Your previous proposal was rejected — ${feedback}` : '';
+  const out = await generateText({
+    model,
+    system: PROPOSER_SYSTEM,
+    tools,
+    maxSteps: 10,
+    prompt: `Decide this cycle for the "${policy.name}" treasury. Risk is ${risk.band} (${risk.score}/100). Investigate with the tools, design a compliant move if warranted, then commit_decision.${revision}`,
+  });
+
+  const trace = (out.steps ?? []).flatMap((s) => (s.toolCalls ?? []).map((c) => c.toolName));
+  return { commit: committed, trace };
+}
+
+/** Deterministic gate for a proposed rebalance: unknown assets, empty legs, and policy. */
+function gateRebalance(
+  input: DecisionInput,
+  legs: { fromAssetId: string; toAssetId: string; weight: number }[],
+): PolicyViolation[] {
+  const { policy, risk, snapshot, runId } = input;
+  if (legs.length === 0) return [{ constraint: 'noLegs', detail: 'Rebalance had no legs.' }];
+  const violations: PolicyViolation[] = [];
+  const known = knownAssetIds(policy);
+  for (const l of legs) {
+    if (!known.has(l.fromAssetId) || !known.has(l.toAssetId)) {
+      violations.push({ constraint: 'unknownAsset', detail: `Unknown asset ${l.fromAssetId}/${l.toAssetId}.` });
+    }
+  }
+  violations.push(...evaluatePolicy(policy, risk, snapshot, buildRebalanceFromLegs(policy, runId, legs)));
+  return violations;
+}
+
+const detail = (v: PolicyViolation[]) => v.map((x) => x.detail).join('; ');
+
+function result(
+  input: DecisionInput,
+  decision: Decision,
+  rationale: string,
+  toolTrace: string[],
+  extra: { review?: AgentReview },
+): AgentResult {
+  return {
+    recommendation: buildRecommendation(input, decision, rationale, { agentProposed: true, review: extra.review }),
+    toolTrace,
+  };
+}
+
+function halt(
+  input: DecisionInput,
+  violations: PolicyViolation[],
+  rationale: string,
+  review: AgentReview | undefined,
+  toolTrace: string[],
+): AgentResult {
+  return result(input, { action: 'halt', compliancePassed: false, violations }, rationale, toolTrace, { review });
 }
