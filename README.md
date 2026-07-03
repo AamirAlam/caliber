@@ -25,10 +25,14 @@ The prototype is deployed and producing real transactions on `casper-test`.
 
 | | |
 |---|---|
-| **CaliberVault contract (package)** | `contract-package-5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0` |
+| **Network** | Casper testnet (`casper-test`) |
+| **CaliberVault package hash** | [`5dd0bfde…12a8cbd2`](https://testnet.cspr.live/contract-package/5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0) |
+| **Contract hash** | [`bdac504f…0dbb4ff5`](https://testnet.cspr.live/contract/bdac504ff9f57316de41be341459cfea603589cd10e302db89e61b0b0dbb4ff5) |
 | **Transaction-producing entry point** | `record_rebalance` |
 | **On-chain rebalances recorded** | read live from the contract's `rebalance_count` |
-| **Explorer** | [testnet.cspr.live](https://testnet.cspr.live) |
+| **Explorer** | [testnet.cspr.live](https://testnet.cspr.live/contract-package/5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0) |
+
+> Full package hash: `contract-package-5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0`
 
 Caliber interacts with Casper **both ways**: it *writes* approved rebalances via
 `record_rebalance`, and *reads* live contract state (`paused`, `rebalance_count`)

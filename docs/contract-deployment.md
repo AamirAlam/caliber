@@ -1,5 +1,18 @@
 # Contract deployment (Casper testnet)
 
+## Current deployed instance
+
+`CaliberVault` is live on `casper-test`:
+
+| | |
+|---|---|
+| Package hash | `contract-package-5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0` |
+| Contract hash | `contract-bdac504ff9f57316de41be341459cfea603589cd10e302db89e61b0b0dbb4ff5` |
+| Package on explorer | https://testnet.cspr.live/contract-package/5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0 |
+| Contract on explorer | https://testnet.cspr.live/contract/bdac504ff9f57316de41be341459cfea603589cd10e302db89e61b0b0dbb4ff5 |
+
+The steps below redeploy your own instance.
+
 ## 1. Get a funded key
 
 Generate a key and fund it from the testnet faucet:
