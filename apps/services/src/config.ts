@@ -15,6 +15,8 @@ export const config = {
     provider: process.env.CALIBER_LLM_PROVIDER ?? 'anthropic',
     apiKey: process.env.ANTHROPIC_API_KEY ?? '',
     model: process.env.CALIBER_DECISION_MODEL ?? 'claude-opus-4-8',
+    /** Independent Risk-Officer reviews per rebalance; majority veto wins. */
+    reviewVotes: Number(process.env.CALIBER_REVIEW_VOTES ?? '3'),
   },
   api: {
     port: Number(process.env.CALIBER_API_PORT ?? '4000'),

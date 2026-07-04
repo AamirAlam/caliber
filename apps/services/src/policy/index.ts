@@ -139,6 +139,17 @@ export function evaluatePolicy(
       detail: `Projected buffer ${(projectedBuffer * 100).toFixed(1)}% still below floor.`,
     });
   }
+  // Improvement gate: a de-risking rebalance must actually raise the liquidity
+  // buffer. This blocks compliant-but-pointless moves that don't reduce risk.
+  const currentBuffer = liquidityBufferPct(snapshot);
+  if (projectedBuffer <= currentBuffer + 1e-6) {
+    violations.push({
+      constraint: 'noImprovement',
+      detail: `Move does not increase the liquidity buffer (${(currentBuffer * 100).toFixed(
+        1,
+      )}% → ${(projectedBuffer * 100).toFixed(1)}%).`,
+    });
+  }
   pushBandViolations(policy, projected, violations);
   return violations;
 }

@@ -63,7 +63,7 @@ export function buildTools(ctx: AgentContext) {
     }),
     suggest_rebalance: tool({
       description:
-        'Get a deterministic reference de-risking rebalance (move from the most over-weight asset into the stablecoin buffer). Use it as a starting point — you may propose something different.',
+        'Reference baseline only — one deterministic de-risking option (trim the single most over-weight asset into the stablecoin buffer). It is NOT the answer: you are expected to size it yourself, pick a different asset, or split across two legs when that is better. Always re-test your own design with evaluate_policy.',
       parameters: z.object({}),
       execute: async () => proposeRebalance(ctx.policy, ctx.snapshot, ctx.runId)?.legs ?? null,
     }),

@@ -74,4 +74,15 @@ describe('deterministic gate on agent-proposed legs', () => {
     const violations = evaluatePolicy(samplePolicy, risk, snapshot, proposal);
     expect(violations.some((v) => v.constraint === 'maxSingleRebalancePct')).toBe(true);
   });
+
+  it('rejects a compliant-but-pointless move that does not raise the buffer', async () => {
+    const snapshot = await snapshotFor(true);
+    const risk = scoreRisk(snapshot);
+    // tbill-rwa → cspr: within cap, but doesn't add to the stablecoin buffer.
+    const proposal = buildRebalanceFromLegs(samplePolicy, 'r', [
+      { fromAssetId: 'tbill-rwa', toAssetId: 'cspr', weight: 0.05 },
+    ]);
+    const violations = evaluatePolicy(samplePolicy, risk, snapshot, proposal);
+    expect(violations.some((v) => v.constraint === 'noImprovement')).toBe(true);
+  });
 });

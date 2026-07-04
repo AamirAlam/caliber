@@ -6,6 +6,7 @@ import {
   type RebalanceRequest,
   type Recommendation,
   type RiskScore,
+  type SignalSnapshot,
   type TraceStep,
   type TreasuryPolicy,
 } from '@caliber/shared';
@@ -22,19 +23,22 @@ import { evaluatePolicy, type PolicyViolation } from '../policy/index.js';
 import { log } from '../logger.js';
 import { resolveModel } from './model.js';
 import { getCasperMcpTools } from './mcp.js';
-import { reviewProposal } from './reviewer.js';
+import { reviewPanel } from './reviewer.js';
 import { buildTools, legSchema, type VaultState } from './tools.js';
 
 const PROPOSER_SYSTEM = `You are the ${AGENT_ROLES.proposer.name}, the ${AGENT_ROLES.proposer.title.toLowerCase()} on Caliber's
-treasury team for tokenized real-world assets. You work alongside the ${AGENT_ROLES.reviewer.name}, who will independently
-review any move you propose. You decide what to do THIS cycle: hold, rebalance, or halt. Work the tools:
+treasury team for tokenized real-world assets. You work alongside the ${AGENT_ROLES.reviewer.name}, who independently
+reviews any move you propose. You decide what to do THIS cycle: hold, rebalance, or halt. Work the tools:
 1. read the signals, policy, and current risk;
 2. reason about whether the treasury is within its mandate;
-3. if a move is warranted, design a de-risking rebalance — choose which assets to trim and the sizing yourself —
-   and TEST it with evaluate_policy. Iterate until evaluate_policy returns zero violations, or conclude no compliant move exists.
-Rules you cannot break: only use assetIds that appear in the policy; keep any single move within the policy's single-rebalance cap;
-compliance is decided ONLY by evaluate_policy, never by you. When you have decided, call commit_decision exactly once with your
-final action, legs (for a rebalance), and a concise 2-3 sentence rationale. Do not call commit_decision more than once.`;
+3. if a move is warranted, DESIGN the rebalance yourself — you own the design. Choose which over-weight asset(s) to trim,
+   size each leg, and split across one or two legs if that is cleaner. suggest_rebalance is only a reference baseline;
+   you may size differently, pick a different asset, or improve on it. A de-risking move must add to the stablecoin buffer.
+   TEST every candidate with evaluate_policy and iterate until it returns zero violations, or conclude no compliant move exists.
+Rules you cannot break: use only assetIds from the policy; keep the total moved within the single-rebalance cap; a rebalance must
+actually raise the liquidity buffer (evaluate_policy enforces this); compliance is decided ONLY by evaluate_policy, never by you.
+When decided, call commit_decision exactly once with your final action, legs (for a rebalance), and a concise 2-3 sentence
+rationale. Do not call commit_decision more than once.`;
 
 const DEFAULT_VAULT_STATE: VaultState = { paused: false, rebalanceCount: 0, contractHash: '' };
 
@@ -55,10 +59,11 @@ export type Commit = z.infer<typeof commitSchema>;
 
 /** Produce a Proposer decision (real one calls the LLM); returns the commit + tool trace. */
 export type ProposeFn = (feedback?: string) => Promise<{ commit: Commit | null; trace: string[] }>;
-/** Adversarial review of a compliant rebalance (real one calls the LLM). */
+/** Adversarial review of a compliant rebalance (real one calls a panel of LLMs). */
 export type ReviewFn = (args: {
   policy: TreasuryPolicy;
   risk: RiskScore;
+  snapshot: SignalSnapshot;
   rebalance: RebalanceRequest;
   rationale: string;
 }) => Promise<AgentReview>;
@@ -90,8 +95,22 @@ export async function generateRecommendation(
   const mcp = await getCasperMcpTools();
   try {
     const propose: ProposeFn = (feedback) => runProposer(model, input, vaultState, mcp.tools, feedback, memory);
-    const review: ReviewFn = (args) => reviewProposal(model, args);
-    return await runDeliberation(input, propose, review);
+    const review: ReviewFn = (args) => reviewPanel(model, args);
+    const result = await runDeliberation(input, propose, review);
+
+    // Baseline oracle: compare the agent's decision to the deterministic engine.
+    // The agent stays authoritative (gated); we only record divergence for audit.
+    const baseline = decideAction(input);
+    if (baseline.action !== result.recommendation.action) {
+      log.info('agent diverged from deterministic baseline', {
+        agent: result.recommendation.action,
+        baseline: baseline.action,
+      });
+      result.toolTrace.push(`baseline:diverge(${baseline.action})`);
+    } else {
+      result.toolTrace.push('baseline:agree');
+    }
+    return result;
   } catch (err) {
     log.warn('deliberation failed; using deterministic fallback', { err: String(err) });
     const decision = decideAction(input);
@@ -141,11 +160,29 @@ export async function runDeliberation(
     const rationale = commit.rationale?.trim() || 'Decision committed by the agent.';
     add({ kind: 'proposal', label: `${AGENT_ROLES.proposer.name} · attempt ${turn}`, detail: `Proposed ${commit.action}`, ok: true });
 
-    // Non-rebalance decisions are accepted directly (hold re-validated for compliance).
-    if (commit.action !== 'rebalance') {
-      const violations = commit.action === 'hold' ? evaluatePolicy(policy, risk, snapshot) : [];
-      add({ kind: 'decision', label: commit.action.toUpperCase(), ok: violations.length === 0 });
-      return result(input, { action: commit.action, compliancePassed: violations.length === 0, violations }, rationale, toolTrace, { review: lastReview, trace: steps });
+    // HOLD is only valid when holding is actually compliant. If the treasury is
+    // in breach, the agent may not hold through it — revise, then halt.
+    if (commit.action === 'hold') {
+      const violations = evaluatePolicy(policy, risk, snapshot);
+      if (violations.length > 0) {
+        if (!isLast) {
+          feedback = `Holding is not compliant: ${detail(violations)}. You must rebalance to fix it or halt — you cannot hold through a breach.`;
+          toolTrace.push('hold_reject', 'revise');
+          add({ kind: 'revision', label: 'Sent back for revision', detail: 'Holding would breach policy' });
+          continue;
+        }
+        add({ kind: 'decision', label: 'HALT', detail: 'Cannot hold through a breach; no compliant move found', ok: false });
+        return halt(input, violations, rationale, lastReview, toolTrace, steps);
+      }
+      add({ kind: 'decision', label: 'HOLD', ok: true });
+      return result(input, { action: 'hold', compliancePassed: true, violations: [] }, rationale, toolTrace, { review: lastReview, trace: steps });
+    }
+
+    // HALT — agent explicitly declines to act; surface any policy context.
+    if (commit.action === 'halt') {
+      const violations = evaluatePolicy(policy, risk, snapshot);
+      add({ kind: 'decision', label: 'HALT', ok: violations.length === 0 });
+      return halt(input, violations, rationale, lastReview, toolTrace, steps);
     }
 
     // Rebalance → deterministic gate.
@@ -168,9 +205,9 @@ export async function runDeliberation(
       return halt(input, gateViolations, rationale, lastReview, toolTrace, steps);
     }
 
-    // Passed the gate → adversarial Risk-Reviewer.
+    // Passed the gate → adversarial Risk-Reviewer panel.
     const rebalance = buildRebalanceFromLegs(policy, input.runId, legs);
-    lastReview = await review({ policy, risk, rebalance, rationale });
+    lastReview = await review({ policy, risk, snapshot, rebalance, rationale });
     toolTrace.push('risk_review');
     add({
       kind: 'review',

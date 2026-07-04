@@ -7,12 +7,14 @@ import { scoreRisk } from '../policy/index.js';
 import { samplePolicy } from '../samplePolicy.js';
 import { AppState } from '../state.js';
 
-async function stressInput(): Promise<DecisionInput> {
+async function inputFor(stress: boolean): Promise<DecisionInput> {
   const state = new AppState(samplePolicy);
-  state.scenarioStress = true;
+  state.scenarioStress = stress;
   const snapshot = await collectSignals([new SimulatedSignalSource(state)], 'snap_test');
   return { runId: 'r', policy: samplePolicy, risk: scoreRisk(snapshot), snapshot };
 }
+const stressInput = () => inputFor(true);
+const calmInput = () => inputFor(false);
 
 /** A proposer that returns a fixed sequence of commits, one per attempt. */
 const proposeSeq =
@@ -94,5 +96,21 @@ describe('runDeliberation — multi-agent self-correction', () => {
     const res = await runDeliberation(input, proposeSeq([null]), reviewSeq([]));
     expect(res.recommendation.agentProposed).toBe(false);
     expect(res.toolTrace).toContain('fallback:no-commit');
+  });
+
+  it('will not hold through a breach — revises, then halts', async () => {
+    const input = await stressInput(); // liquidity below floor → holding is non-compliant
+    const hold: Commit = { action: 'hold', rationale: 'do nothing' };
+    const res = await runDeliberation(input, proposeSeq([hold, hold]), reviewSeq([]));
+    expect(res.recommendation.action).toBe('halt');
+    expect(res.toolTrace).toContain('hold_reject');
+  });
+
+  it('accepts a compliant hold in calm conditions', async () => {
+    const input = await calmInput();
+    const hold: Commit = { action: 'hold', rationale: 'within mandate' };
+    const res = await runDeliberation(input, proposeSeq([hold]), reviewSeq([]));
+    expect(res.recommendation.action).toBe('hold');
+    expect(res.recommendation.compliancePassed).toBe(true);
   });
 });
