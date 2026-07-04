@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AGENT_ROLES } from '@caliber/shared';
 import type { AgentRunLog } from '@caliber/shared';
 import { api, type RunDetail } from '@/lib/api';
+import { Spinner } from '@/components/Spinner';
 import { demoRuns } from '@/lib/mockData';
 
 const PAGE_SIZE = 8;
@@ -252,7 +253,7 @@ function RunDetailView({
           )}
         </div>
         {loading ? (
-          <p className="text-sm text-slate-400">Loading…</p>
+          <Spinner className="h-4 w-4" />
         ) : (
           <p className="text-sm leading-relaxed text-slate-600">
             {rec?.explanation ?? run.notes ?? 'No reasoning recorded.'}
@@ -281,7 +282,7 @@ function RunDetailView({
           Money flow
         </p>
         {loading ? (
-          <p className="text-sm text-slate-400">Loading…</p>
+          <Spinner className="h-4 w-4" />
         ) : legs.length === 0 ? (
           <p className="text-sm text-slate-500">
             No funds moved — decision was <span className="font-medium">{run.action ?? 'hold'}</span>.

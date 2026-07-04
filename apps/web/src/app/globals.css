@@ -214,6 +214,19 @@ body {
   stroke: #232c3f;
 }
 
+/* hover/active backgrounds — Tailwind's hover variants are separate class
+   names, so recolor them explicitly (otherwise they flash near-white in dark). */
+.dark .hover\:bg-slate-50:hover,
+.dark .active\:bg-slate-50:active {
+  background-color: #1a2233;
+}
+.dark .hover\:bg-slate-100:hover {
+  background-color: #202a3d;
+}
+.dark .hover\:bg-slate-50\/60:hover {
+  background-color: rgba(26, 34, 51, 0.55);
+}
+
 /* ─── Funds-flow band (landing hero visual) ──────────────────────── */
 .ai-pulse {
   transform-box: fill-box;

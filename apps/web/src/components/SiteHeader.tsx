@@ -34,19 +34,14 @@ export function SiteHeader() {
 }
 
 export function CaliberMark({ className = '' }: { className?: string }) {
-  // A precision aperture: an open ring (reads as a "C" and a caliber bore/gauge)
-  // with a center pupil — calibration and focus.
+  // A precision aperture: a closed ring (a caliber bore / lens aperture) with a
+  // center pupil. Closed on purpose — an open arc reads as a loading spinner.
   return (
     <span
       className={`flex h-7 w-7 items-center justify-center rounded-lg bg-brand-500 shadow-soft ${className}`}
     >
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden>
-        <path
-          d="M17.9 7.9 A7.2 7.2 0 1 1 17.9 16.1"
-          stroke="white"
-          strokeWidth="2.2"
-          strokeLinecap="round"
-        />
+        <circle cx="12" cy="12" r="7.4" stroke="white" strokeWidth="2.2" />
         <circle cx="12" cy="12" r="2.4" fill="white" />
       </svg>
     </span>

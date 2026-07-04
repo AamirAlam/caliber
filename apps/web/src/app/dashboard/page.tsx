@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AGENT_ROLES } from '@caliber/shared';
 import type { Recommendation, RiskScore, SignalSnapshot, TreasuryPolicy } from '@caliber/shared';
 import { api, type VaultState } from '@/lib/api';
+import { PageLoader } from '@/components/Spinner';
 import { demoPolicy, demoRecommendation, demoSignals } from '@/lib/mockData';
 
 const EXPLORER = process.env.NEXT_PUBLIC_EXPLORER_BASE ?? 'https://testnet.cspr.live';
@@ -90,7 +91,7 @@ export default function DashboardPage() {
   };
 
   if (!policy) {
-    return <div className="mx-auto max-w-5xl px-4 py-16 text-slate-500 sm:px-8">Loading…</div>;
+    return <PageLoader />;
   }
 
   const canApprove = live && rec?.action === 'rebalance';
