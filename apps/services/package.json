@@ -16,6 +16,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",
     "@fastify/cors": "^9.0.1",
+    "@openrouter/ai-sdk-provider": "^0.4.6",
     "@caliber/shared": "workspace:*",
     "ai": "^4.3.19",
     "better-sqlite3": "^11.8.1",
