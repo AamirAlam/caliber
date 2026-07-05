@@ -10,9 +10,21 @@ import type { Scheduler } from '../scheduler/index.js';
  * store; `/scenario/stress` toggles the simulated stress scenario and forces a
  * loop tick; `/approve` resumes a paused run and submits the on-chain deploy.
  */
+/**
+ * Resolve the CORS `origin` option from config:
+ * - `*` (or `true`) → reflect any origin (public read-only demo API).
+ * - comma-separated list → an allowlist of origins.
+ * - otherwise → the single origin string.
+ */
+function corsOrigin(v: string): boolean | string | string[] {
+  if (v === '*' || v === 'true') return true;
+  if (v.includes(',')) return v.split(',').map((s) => s.trim());
+  return v;
+}
+
 export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): FastifyInstance {
   const app = Fastify({ logger: false });
-  void app.register(cors, { origin: config.api.corsOrigin });
+  void app.register(cors, { origin: corsOrigin(config.api.corsOrigin) });
 
   const { state, audit } = deps;
 
