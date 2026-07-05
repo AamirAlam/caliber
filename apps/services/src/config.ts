@@ -12,7 +12,8 @@ export const config = {
   },
   ai: aiConfig(),
   api: {
-    port: Number(process.env.CALIBER_API_PORT ?? '4000'),
+    // Prefer the platform-injected PORT (Railway/Render) so the service is reachable.
+    port: Number(process.env.PORT || process.env.CALIBER_API_PORT || '4000'),
     corsOrigin: process.env.CALIBER_CORS_ORIGIN ?? 'http://localhost:3000',
   },
   loop: {
@@ -29,7 +30,8 @@ export const config = {
  * - otherwise → SQLite file at `CALIBER_SQLITE_PATH` (local dev, the default).
  */
 function dbConfig() {
-  const url = process.env.CALIBER_DATABASE_URL ?? '';
+  // Accept Railway's plugin default (`DATABASE_URL`) as a fallback.
+  const url = process.env.CALIBER_DATABASE_URL || process.env.DATABASE_URL || '';
   if (process.env.CALIBER_DB === 'memory') return { kind: 'memory' as const };
   if (/^postgres(ql)?:\/\//.test(url)) return { kind: 'postgres' as const, url };
   return { kind: 'sqlite' as const, path: process.env.CALIBER_SQLITE_PATH ?? './data/caliber.dev.sqlite' };
