@@ -63,13 +63,24 @@ export class InMemoryAuditStore implements AuditStore {
  * is configured, otherwise in-memory. Runs migrations on first connect.
  */
 export async function createAuditStore(): Promise<AuditStore> {
-  const db = await createKysely();
-  if (!db) {
+  if (config.db.kind === 'memory') {
     log.info('audit store: in-memory (no database configured)');
     return new InMemoryAuditStore();
   }
-  await migrate(db);
-  const target = config.db.kind === 'postgres' ? 'postgres' : config.db.path;
-  log.info('audit store: sql', { backend: config.db.kind, target });
-  return new SqlAuditStore(db);
+  // A database problem must never take the API down — degrade to in-memory
+  // (loudly) rather than crashing on boot with a 502.
+  try {
+    const db = await createKysely();
+    if (!db) return new InMemoryAuditStore();
+    await migrate(db);
+    const target = config.db.kind === 'postgres' ? 'postgres' : config.db.path;
+    log.info('audit store: sql', { backend: config.db.kind, target });
+    return new SqlAuditStore(db);
+  } catch (err) {
+    log.error('audit store: database unavailable — falling back to in-memory (data will NOT persist)', {
+      backend: config.db.kind,
+      err: String(err),
+    });
+    return new InMemoryAuditStore();
+  }
 }

@@ -25,7 +25,15 @@ export async function createKysely(): Promise<DB | null> {
   if (config.db.kind === 'postgres') {
     const pg = await import('pg');
     const Pool = (pg as unknown as { default?: { Pool: typeof pg.Pool }; Pool: typeof pg.Pool }).default?.Pool ?? pg.Pool;
-    return new Kysely<Database>({ dialect: new PostgresDialect({ pool: new Pool({ connectionString: config.db.url }) }) });
+    // Enable SSL only for external endpoints (public proxy / explicit sslmode).
+    // Railway's internal network needs no SSL, and forcing it there breaks the
+    // connection — so keep it off unless the URL clearly requires it.
+    const external = /proxy\.rlwy\.net|sslmode=require|ssl=true/.test(config.db.url);
+    const pool = new Pool({
+      connectionString: config.db.url,
+      ...(external ? { ssl: { rejectUnauthorized: false } } : {}),
+    });
+    return new Kysely<Database>({ dialect: new PostgresDialect({ pool }) });
   }
 
   // SQLite (default, local dev). Ensure the parent directory exists.
