@@ -1,0 +1,17 @@
+# Railway config-as-code for the Caliber API (apps/services).
+#
+# Railway builds this repo with the Railpack builder. The repo is a pnpm
+# workspace with no root `start` script, and the root `build` script is
+# `turbo run build` — which would try to compile the Rust/Odra contracts in a
+# Node image and fail. So both the build and start steps are pinned here:
+#   - build: install deps only (no turbo build; tsx runs TypeScript directly).
+#   - start: launch just the services app.
+# tsx is a runtime dependency, so the install includes it even in production.
+
+[build]
+builder = "RAILPACK"
+buildCommand = "corepack enable && pnpm install --frozen-lockfile"
+
+[deploy]
+startCommand = "pnpm --filter @caliber/services start"
+restartPolicyType = "ON_FAILURE"

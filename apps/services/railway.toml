@@ -1,0 +1,11 @@
+# Railway config when the service Root Directory is set to apps/services.
+# Mirrors the repo-root railway.toml. Commands run from the repo root regardless,
+# so pnpm workspace resolution works. tsx is a runtime dependency.
+
+[build]
+builder = "RAILPACK"
+buildCommand = "corepack enable && pnpm install --frozen-lockfile"
+
+[deploy]
+startCommand = "pnpm --filter @caliber/services start"
+restartPolicyType = "ON_FAILURE"
