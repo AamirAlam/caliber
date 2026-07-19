@@ -13,7 +13,7 @@ export interface RunDetail {
   transaction: TransactionRecord | null;
 }
 
-const BASE = process.env.NEXT_PUBLIC_SERVICES_URL ?? 'http://localhost:4000';
+const BASE = '/api/caliber';
 
 async function get<T>(path: string): Promise<T | null> {
   try {
@@ -52,13 +52,13 @@ export const api = {
   getRuns: () => get<AgentRunLog[]>('/runs'),
   getRun: (id: string) => get<RunDetail>(`/runs/${id}`),
   getVaultState: () => get<VaultState>('/vault/state'),
-  runStress: (active = true) =>
+  runNow: () =>
     post<{
       snapshot: SignalSnapshot | null;
       risk: RiskScore | null;
       recommendation: Recommendation | null;
       pendingRunId: string | null;
-    }>('/scenario/stress', { active }),
+    }>('/runs', {}),
   approve: (runId: string, approver = 'dashboard') =>
     post<{ run: AgentRunLog; tx: TransactionRecord }>('/approve', { runId, approver }),
 };

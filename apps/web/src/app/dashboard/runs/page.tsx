@@ -5,7 +5,7 @@ import { AGENT_ROLES } from '@caliber/shared';
 import type { AgentRunLog } from '@caliber/shared';
 import { api, type RunDetail } from '@/lib/api';
 import { Spinner } from '@/components/Spinner';
-import { demoRuns } from '@/lib/mockData';
+import { MaintenanceMode } from '@/components/MaintenanceMode';
 
 const PAGE_SIZE = 8;
 const EXPLORER = process.env.NEXT_PUBLIC_EXPLORER_BASE ?? 'https://testnet.cspr.live';
@@ -20,15 +20,18 @@ export default function RunsPage() {
   const [page, setPage] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<RunDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const rn = await api.getRuns();
     if (rn === null) {
       setLive(false);
-      setRuns(demoRuns);
+      setError('The services API is unavailable or not configured.');
+      setRuns([]);
       return;
     }
     setLive(true);
+    setError(null);
     setRuns(rn);
   }, []);
 
@@ -53,6 +56,14 @@ export default function RunsPage() {
   const rows = runs.slice(current * PAGE_SIZE, current * PAGE_SIZE + PAGE_SIZE);
   const start = runs.length === 0 ? 0 : current * PAGE_SIZE + 1;
   const end = Math.min(runs.length, current * PAGE_SIZE + PAGE_SIZE);
+
+  if (error && runs.length === 0) {
+    return (
+      <MaintenanceMode
+        detail={`${error} Run history is hidden until the backend is configured and healthy.`}
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 pb-28 sm:px-6 sm:py-8 lg:px-8 lg:py-10 lg:pb-10">

@@ -7,8 +7,8 @@ shell, built with Next.js (App Router), TypeScript, and Tailwind CSS.
 
 - `/` — landing page: hero, product explanation, how it works, architecture
   preview, trust & guardrails, CTA. Design language is institutional and calm.
-- `/dashboard` — dashboard shell with placeholder panels for policy, live
-  signals, the latest recommendation, and run history (static demo data).
+- `/dashboard` — dashboard shell for policy, live signals, the latest
+  recommendation, and run history from the services API.
 
 ## Develop
 
@@ -20,6 +20,11 @@ pnpm --filter @caliber/web dev    # http://localhost:3000
 ## Notes
 
 - Shared domain types come from `@caliber/shared`.
-- The dashboard renders static demo data from `src/lib/mockData.ts`. Wire it to
-  the services API (`NEXT_PUBLIC_SERVICES_URL`) for live data.
+- The dashboard shows an unavailable state when the services API cannot be
+  reached; it does not substitute mock data.
+- In production, point the built-in proxy at the backend with `SERVICES_URL`.
+  Set `CALIBER_ADMIN_TOKEN` on the web deployment so POST requests can be
+  authenticated server-to-server.
+  `NEXT_PUBLIC_SERVICES_URL` is only needed if you intentionally want the browser
+  to call the backend directly.
 - Design tokens live in `tailwind.config.ts` (ink base, single teal accent).

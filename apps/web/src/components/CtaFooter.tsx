@@ -11,7 +11,7 @@ export function CtaFooter() {
             Put a policy at the caliber of your RWA treasury.
           </h2>
           <p className="relative mx-auto mt-4 max-w-xl text-slate-300">
-            Explore the dashboard, run a stress scenario, and watch an approved rebalance settle on
+            Explore the dashboard, run an agent cycle, and watch an approved rebalance settle on
             Casper testnet.
           </p>
           <div className="relative mt-8 flex flex-wrap justify-center gap-3">

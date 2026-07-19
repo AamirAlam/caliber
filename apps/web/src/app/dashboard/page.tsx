@@ -5,7 +5,7 @@ import { AGENT_ROLES } from '@caliber/shared';
 import type { Recommendation, RiskScore, SignalSnapshot, TreasuryPolicy } from '@caliber/shared';
 import { api, type VaultState } from '@/lib/api';
 import { PageLoader } from '@/components/Spinner';
-import { demoPolicy, demoRecommendation, demoSignals } from '@/lib/mockData';
+import { MaintenanceMode } from '@/components/MaintenanceMode';
 
 const EXPLORER = process.env.NEXT_PUBLIC_EXPLORER_BASE ?? 'https://testnet.cspr.live';
 
@@ -39,12 +39,17 @@ export default function DashboardPage() {
     ]);
     if (p === null) {
       setLive(false);
-      setPolicy(demoPolicy);
-      setSnapshot({ id: 'demo', capturedAt: '', signals: demoSignals });
-      setRec(demoRecommendation);
+      setError('The services API is unavailable or not configured.');
+      setPolicy(null);
+      setSnapshot(null);
+      setRisk(null);
+      setRec(null);
+      setVault(null);
+      setPendingRunId(null);
       return;
     }
     setLive(true);
+    setError(null);
     setPolicy(p);
     if (s) setSnapshot(s);
     if (r) setRisk(r);
@@ -58,12 +63,12 @@ export default function DashboardPage() {
     return () => clearInterval(t);
   }, [refresh]);
 
-  const onStress = async (active: boolean) => {
+  const onRunNow = async () => {
     setBusy(true);
     setError(null);
     setDeployHash(null);
     try {
-      const res = await api.runStress(active);
+      const res = await api.runNow();
       setPendingRunId(res.pendingRunId);
       await refresh();
     } catch (e) {
@@ -91,6 +96,13 @@ export default function DashboardPage() {
   };
 
   if (!policy) {
+    if (error) {
+      return (
+        <MaintenanceMode
+          detail={`${error} Live treasury controls are paused until the backend is configured and healthy.`}
+        />
+      );
+    }
     return <PageLoader />;
   }
 
@@ -115,7 +127,7 @@ export default function DashboardPage() {
           className={`pill ${live ? 'border-signal-emerald/30 bg-emerald-50 text-signal-emerald' : 'border-slate-200 bg-slate-50 text-slate-500'}`}
         >
           <span className={`h-1.5 w-1.5 rounded-full ${live ? 'bg-signal-emerald' : 'bg-slate-400'}`} />
-          {live ? 'Live · testnet' : 'Demo'}
+          {live ? 'Live · testnet' : 'Offline'}
         </span>
       </header>
 
@@ -148,20 +160,13 @@ export default function DashboardPage() {
                 </button>
               ) : (
                 <button
-                  onClick={() => onStress(true)}
+                  onClick={onRunNow}
                   disabled={busy || !live}
                   className="btn-primary w-full shadow-pop disabled:opacity-40 sm:w-auto"
                 >
-                  {busy ? 'Running…' : 'Run stress scenario'}
+                  {busy ? 'Running…' : 'Run agent cycle'}
                 </button>
               )}
-              <button
-                onClick={() => onStress(false)}
-                disabled={busy || !live}
-                className="btn-ghost w-full disabled:opacity-40 sm:w-auto"
-              >
-                Reset to calm
-              </button>
             </div>
 
             {error && (
@@ -184,7 +189,7 @@ export default function DashboardPage() {
             )}
             {!live && (
               <p className="mt-3 text-xs text-slate-500">
-                Start the agent (<code className="rounded bg-slate-100 px-1 py-0.5 font-mono">pnpm --filter @caliber/services dev</code>) to go live.
+                Configure and start the services API to stream live treasury signals.
               </p>
             )}
           </div>
