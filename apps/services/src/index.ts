@@ -1,10 +1,10 @@
 import 'dotenv/config';
 import { createAuditStore } from './audit/index.js';
 import { buildServer } from './api/server.js';
-import { config } from './config.js';
+import { config, validateRuntimeConfig } from './config.js';
 import { log } from './logger.js';
 import { defaultDeps } from './orchestrator.js';
-import { samplePolicy } from './samplePolicy.js';
+import { loadPolicy } from './policy/load.js';
 import { Scheduler } from './scheduler/index.js';
 import { AppState } from './state.js';
 
@@ -13,7 +13,8 @@ import { AppState } from './state.js';
  * the scheduler (phase-1 loop), and the HTTP API the dashboard consumes.
  */
 async function main(): Promise<void> {
-  const state = new AppState(samplePolicy);
+  validateRuntimeConfig();
+  const state = new AppState(loadPolicy());
   const audit = await createAuditStore();
   const deps = defaultDeps(audit, state);
   const scheduler = new Scheduler(deps);

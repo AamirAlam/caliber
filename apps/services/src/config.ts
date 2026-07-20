@@ -28,6 +28,15 @@ export interface CaliberConfig {
   signals: {
     feedUrl: string;
     timeoutMs: number;
+    maxAgeMs: number;
+  };
+  policy: {
+    json: string;
+    path: string;
+  };
+  mcp: {
+    casperUrl: string;
+    required: boolean;
   };
   db:
     | { kind: 'memory' }
@@ -65,6 +74,15 @@ export function loadConfig(env: NodeJS.ProcessEnv): CaliberConfig {
     signals: {
       feedUrl: env.CALIBER_SIGNAL_FEED_URL ?? env.RWA_FEED_URL ?? '',
       timeoutMs: numberEnv(env.CALIBER_SIGNAL_FEED_TIMEOUT_MS, 10000),
+      maxAgeMs: numberEnv(env.CALIBER_SIGNAL_MAX_AGE_MS, 300000),
+    },
+    policy: {
+      json: env.CALIBER_POLICY_JSON ?? '',
+      path: env.CALIBER_POLICY_PATH ?? '',
+    },
+    mcp: {
+      casperUrl: env.CALIBER_CASPER_MCP_URL ?? '',
+      required: boolEnv(env.CALIBER_CASPER_MCP_REQUIRED, false),
     },
     db: dbConfig(env),
   };
@@ -142,6 +160,7 @@ export function validateRuntimeConfig(c: CaliberConfig = config): void {
   positive('CALIBER_PAYMENT_MOTES', c.casper.paymentMotes);
   positive('CALIBER_REVIEW_VOTES', c.ai.reviewVotes);
   positive('CALIBER_SIGNAL_FEED_TIMEOUT_MS', c.signals.timeoutMs);
+  positive('CALIBER_SIGNAL_MAX_AGE_MS', c.signals.maxAgeMs);
 
   if (!['ed25519', 'secp256k1'].includes(c.casper.keyAlgo)) {
     errors.push('CALIBER_KEY_ALGO must be ed25519 or secp256k1');
@@ -154,9 +173,15 @@ export function validateRuntimeConfig(c: CaliberConfig = config): void {
 
   if (isProductionLike(c)) {
     if (!c.signals.feedUrl) errors.push('CALIBER_SIGNAL_FEED_URL is required in production/testnet');
+    if (!c.policy.json && !c.policy.path) {
+      errors.push('CALIBER_POLICY_JSON or CALIBER_POLICY_PATH is required in production/testnet');
+    }
     if (c.db.kind !== 'postgres') errors.push('Postgres DATABASE_URL/CALIBER_DATABASE_URL is required in production/testnet');
     if (!c.api.adminToken) errors.push('CALIBER_ADMIN_TOKEN is required in production/testnet');
     if (c.loop.dryRun) errors.push('CALIBER_DRY_RUN=false is required in production/testnet');
+    if (c.mcp.required && !c.mcp.casperUrl) {
+      errors.push('CALIBER_CASPER_MCP_URL is required when CALIBER_CASPER_MCP_REQUIRED=true');
+    }
   }
 
   if (errors.length > 0) {

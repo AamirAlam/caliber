@@ -108,8 +108,9 @@ pnpm --filter @caliber/contracts test     # contract tests (cargo odra, 5/5)
 Copy the env templates (done by `scripts/setup.sh`) and fill in as needed:
 
 - `apps/services/.env` — `CASPER_NODE_RPC_URL`, `CALIBER_VAULT_CONTRACT_HASH`,
-  `CASPER_SECRET_KEY_PATH` (+ `CALIBER_KEY_ALGO`), `CALIBER_SIGNAL_FEED_URL`,
-  `CALIBER_ADMIN_TOKEN`, and `CALIBER_DRY_RUN=false` for real testnet execution.
+  `CASPER_SECRET_KEY_PATH` (+ `CALIBER_KEY_ALGO`), `CALIBER_POLICY_PATH` or
+  `CALIBER_POLICY_JSON`, `CALIBER_SIGNAL_FEED_URL`, `CALIBER_ADMIN_TOKEN`, and
+  `CALIBER_DRY_RUN=false` for real testnet execution.
 - **AI (optional):** set `ANTHROPIC_API_KEY` to enable the live Proposer + Risk-Reviewer
   agents. Swap providers with `CALIBER_LLM_PROVIDER` / `CALIBER_DECISION_MODEL`. Without a
   key, the deterministic decision path runs.
@@ -123,6 +124,7 @@ The safest production setup is:
 - **Railway (`apps/services`)**
   - Deploy the Fastify service with the repo-root `railway.toml` or `apps/services/railway.toml`.
   - Set `CALIBER_DATABASE_URL` or Railway `DATABASE_URL` for Postgres.
+  - Set `CALIBER_POLICY_PATH` or `CALIBER_POLICY_JSON` to the real treasury policy; deployed modes reject the development sample.
   - Set `CALIBER_SIGNAL_FEED_URL` to a live JSON feed that returns `Signal[]` or `{ "signals": Signal[] }`.
   - Set `CALIBER_ADMIN_TOKEN`; Vercel uses it server-side for `POST /runs` and `POST /approve`.
   - Set `PORT` via Railway defaults; the service already binds `0.0.0.0:$PORT`.
@@ -156,8 +158,11 @@ Implemented now:
 - **casper-js-sdk** — builds, signs, submits `record_rebalance`, and reads live
   Casper state through RPC.
 - **Casper MCP Server** — optional agent tool provider when
-  `CALIBER_CASPER_MCP_URL` is set. Each recommendation trace records whether MCP
-  was connected or whether the agent used direct RPC/SDK fallback.
+  `CALIBER_CASPER_MCP_URL` is set. Caliber also injects a built-in
+  `casper_get_vault_state` tool into the agent so every LLM cycle can inspect
+  live Casper vault state. Set `CALIBER_CASPER_MCP_REQUIRED=true` for a demo run
+  that must fail unless the external Casper MCP server is connected. Each
+  recommendation trace records MCP status.
 
 Planned launch integrations:
 

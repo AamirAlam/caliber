@@ -45,9 +45,9 @@ persists the richer off-chain history (signals, reasoning traces, run logs).
 ## Local development
 
 ```bash
-cp .env.example .env        # fill in Casper RPC / keys when going live
+cp .env.example .env        # fill in Casper RPC, signer, DB, admin token, and signal feed
 pnpm --filter @caliber/services dev        # entry point (boots the scheduler)
-pnpm --filter @caliber/services run:once   # single loop entry (CLI scaffold)
+pnpm --filter @caliber/services run:once   # single configured loop entry
 ```
 
 ## Going live on Casper testnet
@@ -55,6 +55,8 @@ pnpm --filter @caliber/services run:once   # single loop entry (CLI scaffold)
 1. Deploy the vault contract (see `packages/contracts`) and set
    `CALIBER_VAULT_CONTRACT_HASH`.
 2. Provide a funded testnet key at `CASPER_SECRET_KEY_PATH`.
-3. Implement the `TODO` in `execution/index.ts` using `casper-js-sdk` or the
-   Casper MCP server to build, sign, and submit the `record_rebalance` deploy.
-4. Set `CALIBER_DRY_RUN=false`.
+3. Set `CALIBER_POLICY_PATH` or `CALIBER_POLICY_JSON` to the real treasury policy.
+4. Set `CALIBER_SIGNAL_FEED_URL` to a live JSON feed that returns `Signal[]` or
+   `{ "signals": Signal[] }`.
+5. Set Postgres via `CALIBER_DATABASE_URL` / `DATABASE_URL`, set
+   `CALIBER_ADMIN_TOKEN`, and set `CALIBER_DRY_RUN=false`.

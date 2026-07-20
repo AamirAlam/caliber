@@ -13,16 +13,16 @@ export interface PendingRun {
   rebalance: RebalanceRequest;
   /** Opaque token the executor requires before submitting on-chain. */
   approvalToken: string;
+  snapshot: SignalSnapshot;
+  risk: RiskScore;
 }
 
 /**
  * In-process application state. The dashboard reads the `latest*` fields; the
- * scenario flag drives the simulated signal source. In-memory is acceptable —
- * the on-chain rebalance record is the durable audit anchor.
+ * database and on-chain rebalance record are the durable audit anchors.
  */
 export class AppState {
   activePolicy: TreasuryPolicy;
-  scenarioStress = false;
   latestSnapshot?: SignalSnapshot;
   latestRisk?: RiskScore;
   latestRecommendation?: Recommendation;

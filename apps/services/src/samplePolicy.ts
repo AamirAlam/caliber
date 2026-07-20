@@ -1,6 +1,6 @@
 import type { TreasuryPolicy } from '@caliber/shared';
 
-/** A realistic example policy used for local dev and the run-once CLI. */
+/** Development-only fallback. Deployed modes must provide CALIBER_POLICY_JSON or CALIBER_POLICY_PATH. */
 export const samplePolicy: TreasuryPolicy = {
   id: 'pol_demo',
   name: 'Conservative RWA Treasury',

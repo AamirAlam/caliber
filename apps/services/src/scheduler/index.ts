@@ -11,6 +11,10 @@ export class Scheduler {
   private timer?: ReturnType<typeof setInterval>;
   private seq = 0;
   private running = false;
+  private lastStartedAt?: string;
+  private lastSucceededAt?: string;
+  private lastFailedAt?: string;
+  private lastError?: string;
 
   constructor(
     private readonly deps: OrchestratorDeps,
@@ -28,7 +32,7 @@ export class Scheduler {
     log.info('scheduler stopped');
   }
 
-  /** Run one loop now (used by the scenario trigger). Returns the seq used. */
+  /** Run one loop now, used by the authenticated manual trigger. Returns the seq used. */
   async runNow(): Promise<number> {
     await this.tick();
     return this.seq;
@@ -37,12 +41,29 @@ export class Scheduler {
   private async tick(): Promise<void> {
     if (this.running) return;
     this.running = true;
+    this.lastStartedAt = new Date().toISOString();
     try {
       await runAgentLoop(this.deps, ++this.seq);
+      this.lastSucceededAt = new Date().toISOString();
+      this.lastError = undefined;
     } catch (err) {
+      this.lastFailedAt = new Date().toISOString();
+      this.lastError = String(err);
       log.error('agent loop failed', { seq: this.seq, err: String(err) });
     } finally {
       this.running = false;
     }
+  }
+
+  status() {
+    return {
+      running: this.running,
+      seq: this.seq,
+      intervalMs: this.intervalMs,
+      lastStartedAt: this.lastStartedAt,
+      lastSucceededAt: this.lastSucceededAt,
+      lastFailedAt: this.lastFailedAt,
+      lastError: this.lastError,
+    };
   }
 }

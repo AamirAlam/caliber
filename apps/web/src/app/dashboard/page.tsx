@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { AGENT_ROLES } from '@caliber/shared';
-import type { Recommendation, RiskScore, SignalSnapshot, TreasuryPolicy } from '@caliber/shared';
+import type { Recommendation, RiskScore, SignalSnapshot, TraceStep, TreasuryPolicy } from '@caliber/shared';
 import { api, type VaultState } from '@/lib/api';
 import { PageLoader } from '@/components/Spinner';
 import { MaintenanceMode } from '@/components/MaintenanceMode';
@@ -270,6 +270,33 @@ export default function DashboardPage() {
                     />
                   </div>
                 </div>
+
+                <div className="sm:col-span-2">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Execution boundary
+                  </p>
+                  <div className="grid gap-2.5 sm:grid-cols-3">
+                    <BoundaryItem label="AI role" value="Propose and explain" />
+                    <BoundaryItem
+                      label="Hard gate"
+                      value={rec.compliancePassed ? 'Policy passed' : 'Policy blocked'}
+                      ok={rec.compliancePassed}
+                    />
+                    <BoundaryItem
+                      label="Settlement"
+                      value={rec.action === 'rebalance' ? 'Human approval required' : 'No deploy prepared'}
+                    />
+                  </div>
+                </div>
+
+                {rec.trace.length > 0 && (
+                  <div className="sm:col-span-2">
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Tool and decision trace
+                    </p>
+                    <TraceTimeline trace={rec.trace} />
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -368,6 +395,73 @@ function DeliberationStep({ role, ok, note }: { role: string; ok: boolean; note:
         <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{note}</p>
       </div>
     </div>
+  );
+}
+
+function BoundaryItem({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
+  return (
+    <div className="rounded-lg border border-slate-900/[0.06] bg-white p-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p
+        className={`mt-1 text-sm font-medium ${
+          ok === undefined ? 'text-slate-700' : ok ? 'text-signal-emerald' : 'text-signal-rose'
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function TraceTimeline({ trace }: { trace: TraceStep[] }) {
+  return (
+    <ol className="grid gap-2.5">
+      {trace.map((t) => (
+        <li key={`${t.step}-${t.kind}-${t.label}`} className="flex gap-3 rounded-lg border border-slate-900/[0.06] bg-white p-3">
+          <TraceIcon kind={t.kind} ok={t.ok} />
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-[11px] font-semibold text-slate-400">
+                {String(t.step + 1).padStart(2, '0')}
+              </span>
+              <p className="text-sm font-medium text-ink-900">{t.label}</p>
+              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                {t.kind}
+              </span>
+            </div>
+            {t.detail && <p className="mt-1 text-xs leading-relaxed text-slate-500">{t.detail}</p>}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function TraceIcon({ kind, ok }: { kind: TraceStep['kind']; ok?: boolean }) {
+  const tone =
+    ok === false
+      ? 'border-signal-rose/30 bg-rose-50 text-signal-rose'
+      : ok === true
+        ? 'border-signal-emerald/30 bg-emerald-50 text-signal-emerald'
+        : 'border-slate-200 bg-slate-50 text-slate-500';
+  const glyph =
+    kind === 'proposal'
+      ? 'P'
+      : kind === 'tools'
+        ? 'T'
+        : kind === 'gate'
+          ? 'G'
+          : kind === 'review'
+            ? 'R'
+            : kind === 'revision'
+              ? '↻'
+              : kind === 'decision'
+                ? 'D'
+                : 'F';
+  return (
+    <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${tone}`}>
+      {glyph}
+    </span>
   );
 }
 
