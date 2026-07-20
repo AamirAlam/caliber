@@ -97,6 +97,21 @@ export async function generateRecommendation(
     const propose: ProposeFn = (feedback) => runProposer(model, input, vaultState, mcp.tools, feedback, memory);
     const review: ReviewFn = (args) => reviewPanel(model, args);
     const result = await runDeliberation(input, propose, review);
+    const trace = result.recommendation.trace;
+    trace.unshift({
+      step: -1,
+      kind: 'tools',
+      label: 'Casper AI Toolkit',
+      detail:
+        mcp.status === 'connected'
+          ? `Casper MCP connected (${mcp.toolNames.length} tools): ${mcp.toolNames.join(', ')}`
+          : mcp.status === 'disabled'
+            ? 'Casper MCP disabled; using direct Casper RPC and casper-js-sdk fallback.'
+            : 'Casper MCP unavailable; using direct Casper RPC and casper-js-sdk fallback.',
+      ok: mcp.status === 'connected' ? true : undefined,
+    });
+    result.recommendation.trace = trace.map((s, step) => ({ ...s, step }));
+    result.toolTrace.push(`casper_mcp:${mcp.status}`);
 
     // Baseline oracle: compare the agent's decision to the deterministic engine.
     // The agent stays authoritative (gated); we only record divergence for audit.

@@ -8,17 +8,19 @@ import { experimental_createMCPClient } from 'ai';
  */
 export async function getCasperMcpTools(): Promise<{
   tools: Record<string, unknown>;
+  status: 'disabled' | 'connected' | 'unavailable';
+  toolNames: string[];
   close: () => Promise<void>;
 }> {
   const url = process.env.CALIBER_CASPER_MCP_URL;
-  if (!url) return { tools: {}, close: async () => {} };
+  if (!url) return { tools: {}, status: 'disabled', toolNames: [], close: async () => {} };
   try {
     const client = await experimental_createMCPClient({
       transport: { type: 'sse', url },
     });
     const tools = await client.tools();
-    return { tools, close: () => client.close() };
+    return { tools, status: 'connected', toolNames: Object.keys(tools), close: () => client.close() };
   } catch {
-    return { tools: {}, close: async () => {} };
+    return { tools: {}, status: 'unavailable', toolNames: [], close: async () => {} };
   }
 }

@@ -108,18 +108,40 @@ pnpm --filter @caliber/contracts test     # contract tests (cargo odra, 5/5)
 Copy the env templates (done by `scripts/setup.sh`) and fill in as needed:
 
 - `apps/services/.env` — `CASPER_NODE_RPC_URL`, `CALIBER_VAULT_CONTRACT_HASH`,
-  `CASPER_SECRET_KEY_PATH` (+ `CALIBER_KEY_ALGO`), and `CALIBER_DRY_RUN` (`true` keeps the
-  agent off-chain-safe for local runs).
+  `CASPER_SECRET_KEY_PATH` (+ `CALIBER_KEY_ALGO`), `CALIBER_SIGNAL_FEED_URL`,
+  `CALIBER_ADMIN_TOKEN`, and `CALIBER_DRY_RUN=false` for real testnet execution.
 - **AI (optional):** set `ANTHROPIC_API_KEY` to enable the live Proposer + Risk-Reviewer
   agents. Swap providers with `CALIBER_LLM_PROVIDER` / `CALIBER_DECISION_MODEL`. Without a
   key, the deterministic decision path runs.
 - `apps/web/.env.local` — `NEXT_PUBLIC_SERVICES_URL`, `NEXT_PUBLIC_VAULT_CONTRACT_HASH`,
   `NEXT_PUBLIC_EXPLORER_BASE`.
 
-## Demo flow
+### Vercel + Railway deployment
+
+The safest production setup is:
+
+- **Railway (`apps/services`)**
+  - Deploy the Fastify service with the repo-root `railway.toml` or `apps/services/railway.toml`.
+  - Set `CALIBER_DATABASE_URL` or Railway `DATABASE_URL` for Postgres.
+  - Set `CALIBER_SIGNAL_FEED_URL` to a live JSON feed that returns `Signal[]` or `{ "signals": Signal[] }`.
+  - Set `CALIBER_ADMIN_TOKEN`; Vercel uses it server-side for `POST /runs` and `POST /approve`.
+  - Set `PORT` via Railway defaults; the service already binds `0.0.0.0:$PORT`.
+  - Set `CALIBER_DRY_RUN=false` and mount a real funded PEM file because `CASPER_SECRET_KEY_PATH` is read from the filesystem.
+  - If you still call Railway directly from a browser, set `CALIBER_CORS_ORIGIN` to your Vercel URL.
+  - Quick reachability checks: `/health` should return `200 OK`; `/ready` should return `200 OK` only when dependencies are reachable.
+- **Vercel (`apps/web`)**
+  - Set the project root to `apps/web`.
+  - Set `SERVICES_URL=https://<your-railway-service>.up.railway.app`.
+  - Set the same `CALIBER_ADMIN_TOKEN` so the proxy can authenticate mutations server-to-server.
+  - If `SERVICES_URL` is missing, the Next.js proxy falls back to `http://localhost:4000`, which makes production requests fail with `502`.
+  - `NEXT_PUBLIC_SERVICES_URL` is optional now; the frontend uses a Next.js proxy at `/api/caliber`.
+
+This avoids browser-to-Railway CORS entirely. Vercel calls Railway server-to-server, and the browser only talks to Vercel.
+
+## Testnet flow
 
 1. Dashboard shows the policy, live signals, a risk gauge, and the latest decision.
-2. **Run stress scenario** → liquidity drops, risk crosses the ceiling.
+2. **Run agent cycle** → the service pulls the configured live signal feed.
 3. The agents deliberate: the Proposer designs a compliant de-risking rebalance; the
    Risk-Reviewer approves it.
 4. **Approve & settle on Casper** → a real `record_rebalance` deploy is submitted; the
@@ -127,10 +149,21 @@ Copy the env templates (done by `scripts/setup.sh`) and fill in as needed:
 
 ## Casper AI toolkit usage
 
-- **Odra** — the CaliberVault contract (deployed, tested, owner-gated, emits audit events).
-- **casper-js-sdk** — builds/signs/submits `record_rebalance` and reads live contract state.
-- **Casper MCP Server** — plugged into the agent's toolset when `CALIBER_CASPER_MCP_URL`
-  is set (direct RPC is the fallback).
+Implemented now:
+
+- **Odra** — `CaliberVault` is the deployed Casper testnet contract; it is
+  owner-gated, records approved rebalances, and emits audit events.
+- **casper-js-sdk** — builds, signs, submits `record_rebalance`, and reads live
+  Casper state through RPC.
+- **Casper MCP Server** — optional agent tool provider when
+  `CALIBER_CASPER_MCP_URL` is set. Each recommendation trace records whether MCP
+  was connected or whether the agent used direct RPC/SDK fallback.
+
+Planned launch integrations:
+
+- **CSPR.cloud** for hosted chain data and signal infrastructure.
+- **x402** for paid, verifiable signal-feed requests between agents and data providers.
+- **CSPR.click** for wallet-based human approvals once backend hardening is complete.
 
 ## Contract surface (`CaliberVault`)
 

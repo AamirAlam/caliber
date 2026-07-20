@@ -4,22 +4,22 @@ type Item =
 
 const items: Item[] = [
   { kind: 'label', text: 'Off-chain — Caliber agent' },
-  { kind: 'step', n: '01', title: 'Ingest signals', desc: 'Live market and RWA data is pulled in continuously.', tools: ['CSPR.cloud', 'x402'] },
+  { kind: 'step', n: '01', title: 'Ingest signals', desc: 'Live market and RWA data is pulled in continuously.', tools: ['HTTP signal feed', 'CSPR.cloud-ready'] },
   { kind: 'step', n: '02', title: 'Reason & score risk', desc: 'The agent assesses liquidity and risk against the mandate.', tools: ['Caliber agent'] },
   { kind: 'step', n: '03', title: 'Check policy guardrails', desc: 'Deterministic rules approve, hold, or halt the action.', tools: ['Caliber agent'] },
   { kind: 'label', text: 'On-chain — Casper' },
-  { kind: 'step', n: '04', title: 'Sign the approved action', desc: 'The rebalance is signed before anything is submitted.', tools: ['CSPR.click', 'casper-eip-712'] },
-  { kind: 'step', n: '05', title: 'Submit to Casper', desc: 'The deploy is broadcast and executed on the network.', tools: ['Casper MCP'] },
+  { kind: 'step', n: '04', title: 'Sign the approved action', desc: 'The rebalance is signed before anything is submitted.', tools: ['casper-js-sdk'] },
+  { kind: 'step', n: '05', title: 'Submit to Casper', desc: 'The deploy is broadcast and executed on the network.', tools: ['casper-js-sdk', 'Casper RPC'] },
   { kind: 'step', n: '06', title: 'Record & audit', desc: 'CaliberVault stores the rebalance and emits an audit event.', tools: ['Odra · CaliberVault'] },
 ];
 
 const toolkit = [
-  { label: 'Odra', desc: 'Smart contract framework — the CaliberVault contract.' },
-  { label: 'Casper MCP Server', desc: 'Query state and submit deploys via MCP.' },
-  { label: 'CSPR.click', desc: 'Wallet management and transaction signing.' },
-  { label: 'CSPR.cloud', desc: 'REST / Streaming / Node data middleware.' },
-  { label: 'x402 Facilitator', desc: 'Pay-per-request access to data feeds.' },
-  { label: 'casper-eip-712', desc: 'Typed-data signing for gasless approvals.' },
+  { label: 'Odra', desc: 'Implemented: CaliberVault contract, owner-gated audit events.' },
+  { label: 'casper-js-sdk', desc: 'Implemented: signs and submits record_rebalance deploys.' },
+  { label: 'Casper MCP Server', desc: 'Implemented as optional agent tools for on-chain context.' },
+  { label: 'CSPR.cloud', desc: 'Planned signal and chain-data provider for hosted deployments.' },
+  { label: 'x402 Facilitator', desc: 'Planned paid signal-feed access for agent-to-service requests.' },
+  { label: 'CSPR.click', desc: 'Planned wallet-based approval flow after backend hardening.' },
 ];
 
 export function Architecture() {
