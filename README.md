@@ -113,7 +113,8 @@ Copy the env templates (done by `scripts/setup.sh`) and fill in as needed:
 - **AI (optional):** set `ANTHROPIC_API_KEY` to enable the live Proposer + Risk-Reviewer
   agents. Swap providers with `CALIBER_LLM_PROVIDER` / `CALIBER_DECISION_MODEL`. Without a
   key, the deterministic decision path runs.
-- `apps/web/.env.local` — `NEXT_PUBLIC_SERVICES_URL`, `NEXT_PUBLIC_VAULT_CONTRACT_HASH`,
+- `apps/web/.env.local` — `SERVICES_URL`, `CALIBER_ADMIN_TOKEN`,
+  `OPERATOR_ACCESS_CODE`, `NEXT_PUBLIC_VAULT_CONTRACT_HASH`,
   `NEXT_PUBLIC_EXPLORER_BASE`.
 
 ### Vercel + Railway deployment
@@ -134,6 +135,7 @@ The safest production setup is:
   - Set the project root to `apps/web`.
   - Set `SERVICES_URL=https://<your-railway-service>.up.railway.app`.
   - Set the same `CALIBER_ADMIN_TOKEN` so the proxy can authenticate mutations server-to-server.
+  - Set `OPERATOR_ACCESS_CODE`; public visitors stay read-only, and only users with this code can unlock run/approve controls.
   - If `SERVICES_URL` is missing, the Next.js proxy falls back to `http://localhost:4000`, which makes production requests fail with `502`.
   - `NEXT_PUBLIC_SERVICES_URL` is optional now; the frontend uses a Next.js proxy at `/api/caliber`.
 

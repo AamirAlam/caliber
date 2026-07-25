@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { hasOperatorSession } from '@/lib/operatorAuth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -25,7 +26,11 @@ async function forward(req: NextRequest, path: string[]): Promise<NextResponse> 
   headers.delete('connection');
   headers.delete('content-length');
   headers.delete('accept-encoding');
-  if (process.env.CALIBER_ADMIN_TOKEN && req.method !== 'GET' && req.method !== 'HEAD') {
+  const mutation = req.method !== 'GET' && req.method !== 'HEAD';
+  if (mutation && !hasOperatorSession(req)) {
+    return NextResponse.json({ error: 'operator access required' }, { status: 403 });
+  }
+  if (process.env.CALIBER_ADMIN_TOKEN && mutation) {
     headers.set('authorization', `Bearer ${process.env.CALIBER_ADMIN_TOKEN}`);
   }
 

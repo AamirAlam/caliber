@@ -28,6 +28,10 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(true);
   const [showReasoning, setShowReasoning] = useState(false);
+  const [operator, setOperator] = useState(false);
+  const [unlockOpen, setUnlockOpen] = useState(false);
+  const [operatorCode, setOperatorCode] = useState('');
+  const [operatorError, setOperatorError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const [p, s, r, rc, v] = await Promise.all([
@@ -58,10 +62,36 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    void fetch('/api/operator/session', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((body: { operator?: boolean }) => setOperator(Boolean(body.operator)))
+      .catch(() => setOperator(false));
     void refresh();
     const t = setInterval(() => void refresh(), 4000);
     return () => clearInterval(t);
   }, [refresh]);
+
+  const unlockOperator = async () => {
+    setOperatorError(null);
+    const res = await fetch('/api/operator/session', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: operatorCode }),
+    });
+    if (!res.ok) {
+      setOperatorError('Operator code was not accepted.');
+      return;
+    }
+    setOperator(true);
+    setUnlockOpen(false);
+    setOperatorCode('');
+  };
+
+  const lockOperator = async () => {
+    await fetch('/api/operator/session', { method: 'DELETE' }).catch(() => undefined);
+    setOperator(false);
+    setPendingRunId(null);
+  };
 
   const onRunNow = async () => {
     setBusy(true);
@@ -106,7 +136,7 @@ export default function DashboardPage() {
     return <PageLoader />;
   }
 
-  const canApprove = live && rec?.action === 'rebalance';
+  const canApprove = live && operator && rec?.action === 'rebalance';
   const headline =
     rec?.action === 'rebalance'
       ? 'Rebalance recommended'
@@ -130,6 +160,53 @@ export default function DashboardPage() {
           {live ? 'Live · testnet' : 'Offline'}
         </span>
       </header>
+
+      <section className="mt-5 rounded-xl border border-slate-900/[0.07] bg-white px-4 py-3 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-ink-900">
+              {operator ? 'Operator controls unlocked' : 'Public testnet workspace'}
+            </p>
+            <p className="mt-0.5 text-sm text-slate-500">
+              {operator
+                ? 'You can trigger runs and approve policy-gated rebalances for this treasury.'
+                : 'Visitors can inspect live signals, policy checks, and audit history. Execution requires treasury-operator access.'}
+            </p>
+          </div>
+          {operator ? (
+            <button onClick={lockOperator} className="btn-secondary w-full sm:w-auto">
+              Lock controls
+            </button>
+          ) : (
+            <button onClick={() => setUnlockOpen(true)} className="btn-secondary w-full sm:w-auto">
+              Unlock operator controls
+            </button>
+          )}
+        </div>
+      </section>
+
+      {unlockOpen && (
+        <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/50 p-4">
+          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <label className="block">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Operator code
+              </span>
+              <input
+                value={operatorCode}
+                onChange={(e) => setOperatorCode(e.target.value)}
+                type="password"
+                className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                placeholder="Enter treasury operator code"
+              />
+            </label>
+            <button onClick={unlockOperator} className="btn-primary">
+              Unlock
+            </button>
+          </div>
+          {operatorError && <p className="mt-2 text-sm text-signal-rose">{operatorError}</p>}
+        </div>
+      )}
 
       {/* ── Decision hero: the single focal element ── */}
       <section className="animate-in mt-6 overflow-hidden rounded-2xl border border-slate-900/[0.07] bg-white shadow-card">
@@ -158,7 +235,7 @@ export default function DashboardPage() {
                 >
                   {busy ? 'Submitting…' : 'Approve & settle on Casper →'}
                 </button>
-              ) : (
+              ) : operator ? (
                 <button
                   onClick={onRunNow}
                   disabled={busy || !live}
@@ -166,6 +243,18 @@ export default function DashboardPage() {
                 >
                   {busy ? 'Running…' : 'Run agent cycle'}
                 </button>
+              ) : (
+                <button
+                  onClick={() => setUnlockOpen(true)}
+                  className="btn-primary w-full shadow-pop sm:w-auto"
+                >
+                  Sign in as operator
+                </button>
+              )}
+              {!operator && rec?.action === 'rebalance' && (
+                <span className="text-sm text-slate-500">
+                  Rebalance approval is hidden until operator access is unlocked.
+                </span>
               )}
             </div>
 
