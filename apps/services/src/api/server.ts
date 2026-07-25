@@ -1,14 +1,14 @@
 import cors from '@fastify/cors';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { config } from '../config.js';
-import { readVaultStateCached } from '../casper/reader.js';
+import { readVaultState, readVaultStateCached } from '../casper/reader.js';
 import { executeApproved, type OrchestratorDeps } from '../orchestrator.js';
 import type { Scheduler } from '../scheduler/index.js';
 
 /**
  * Thin HTTP API the dashboard consumes. Reads come from AppState / the audit
- * store; `/scenario/stress` toggles the simulated stress scenario and forces a
- * loop tick; `/approve` resumes a paused run and submits the on-chain deploy.
+ * store; `POST /runs` forces a loop tick from configured live sources;
+ * `/approve` resumes a paused run and submits the on-chain deploy.
  */
 /**
  * Resolve the CORS `origin` option from config:
@@ -28,7 +28,141 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
 
   const { state, audit } = deps;
 
+  app.get('/', async () => ({
+    service: 'caliber-services',
+    status: 'ok',
+    routes: {
+      health: '/health',
+      ready: '/ready',
+      status: '/status',
+      metrics: '/metrics',
+      policy: '/policy',
+      runs: '/runs',
+      vaultState: '/vault/state',
+    },
+  }));
   app.get('/health', async () => ({ status: 'ok' }));
+  app.get('/ready', async (_req, reply) => {
+    const checks: Record<string, 'ok' | 'fail'> = {
+      scheduler: 'ok',
+      vault: 'ok',
+      database: 'ok',
+    };
+    try {
+      await readVaultState();
+    } catch {
+      checks.vault = 'fail';
+    }
+    try {
+      await audit.listRuns();
+    } catch {
+      checks.database = 'fail';
+    }
+    const ok = Object.values(checks).every((v) => v === 'ok');
+    return reply.code(ok ? 200 : 503).send({ status: ok ? 'ready' : 'not_ready', checks, scheduler: scheduler.status() });
+  });
+  app.get('/metrics', async (_req, reply) => {
+    const s = scheduler.status();
+    const runs = await audit.listRuns();
+    const latestRun = runs[0];
+    const runCounts = summarizeRuns(runs);
+    const latestSignalAge = state.latestSnapshot
+      ? Math.max(0, Math.floor((Date.now() - Date.parse(state.latestSnapshot.capturedAt)) / 1000))
+      : 0;
+    const lines = [
+      '# HELP caliber_scheduler_running Whether the scheduler is currently running a loop.',
+      '# TYPE caliber_scheduler_running gauge',
+      `caliber_scheduler_running ${s.running ? 1 : 0}`,
+      '# HELP caliber_scheduler_seq Last scheduler sequence number in this process.',
+      '# TYPE caliber_scheduler_seq counter',
+      `caliber_scheduler_seq ${s.seq}`,
+      '# HELP caliber_scheduler_last_success_unixtime Last successful loop completion time.',
+      '# TYPE caliber_scheduler_last_success_unixtime gauge',
+      `caliber_scheduler_last_success_unixtime ${s.lastSucceededAt ? Math.floor(Date.parse(s.lastSucceededAt) / 1000) : 0}`,
+      '# HELP caliber_scheduler_last_failure_unixtime Last failed loop time.',
+      '# TYPE caliber_scheduler_last_failure_unixtime gauge',
+      `caliber_scheduler_last_failure_unixtime ${s.lastFailedAt ? Math.floor(Date.parse(s.lastFailedAt) / 1000) : 0}`,
+      '# HELP caliber_runs_total Total agent runs by status and action.',
+      '# TYPE caliber_runs_total counter',
+      ...[...runCounts.entries()].map(([labels, count]) => `caliber_runs_total{${labels}} ${count}`),
+      '# HELP caliber_latest_risk_score Latest deterministic treasury risk score.',
+      '# TYPE caliber_latest_risk_score gauge',
+      `caliber_latest_risk_score ${state.latestRisk?.score ?? 0}`,
+      '# HELP caliber_pending_approval Whether an executable rebalance is awaiting approval.',
+      '# TYPE caliber_pending_approval gauge',
+      `caliber_pending_approval ${state.pendingRun ? 1 : 0}`,
+      '# HELP caliber_latest_signal_age_seconds Age of the latest accepted signal snapshot.',
+      '# TYPE caliber_latest_signal_age_seconds gauge',
+      `caliber_latest_signal_age_seconds ${latestSignalAge}`,
+      '# HELP caliber_latest_run_started_unixtime Latest run start time.',
+      '# TYPE caliber_latest_run_started_unixtime gauge',
+      `caliber_latest_run_started_unixtime ${latestRun ? Math.floor(Date.parse(latestRun.startedAt) / 1000) : 0}`,
+    ];
+    return reply.type('text/plain; version=0.0.4').send(`${lines.join('\n')}\n`);
+  });
+  app.get('/status', async () => {
+    const runs = await audit.listRuns();
+    const latestRun = runs[0];
+    const latestTx = latestRun?.transactionId ? await audit.getTransaction(latestRun.transactionId) : undefined;
+    const signalAgeSeconds = state.latestSnapshot
+      ? Math.max(0, Math.floor((Date.now() - Date.parse(state.latestSnapshot.capturedAt)) / 1000))
+      : null;
+
+    return {
+      status: 'ok',
+      mode: config.env,
+      dryRun: config.loop.dryRun,
+      policy: {
+        id: state.activePolicy.id,
+        name: state.activePolicy.name,
+        version: state.activePolicy.version,
+        paused: state.activePolicy.paused,
+      },
+      scheduler: scheduler.status(),
+      latestRun: latestRun
+        ? {
+            id: latestRun.id,
+            status: latestRun.status,
+            stage: latestRun.stage,
+            action: latestRun.action ?? null,
+            riskScore: latestRun.riskScore ?? null,
+            deployHash: latestRun.deployHash ?? null,
+            startedAt: latestRun.startedAt,
+            endedAt: latestRun.endedAt ?? null,
+          }
+        : null,
+      latestSignal: state.latestSnapshot
+        ? {
+            snapshotId: state.latestSnapshot.id,
+            capturedAt: state.latestSnapshot.capturedAt,
+            ageSeconds: signalAgeSeconds,
+            signalCount: state.latestSnapshot.signals.length,
+          }
+        : null,
+      latestRisk: state.latestRisk
+        ? {
+            score: state.latestRisk.score,
+            band: state.latestRisk.band,
+            computedAt: state.latestRisk.computedAt,
+          }
+        : null,
+      pendingApproval: state.pendingRun
+        ? {
+            runId: state.pendingRun.runId,
+            recommendationId: state.pendingRun.recommendation.id,
+            riskScore: state.pendingRun.risk.score,
+          }
+        : null,
+      latestTransaction: latestTx
+        ? {
+            id: latestTx.id,
+            status: latestTx.status,
+            deployHash: latestTx.deployHash ?? null,
+            finalizedAt: latestTx.finalizedAt ?? null,
+          }
+        : null,
+    };
+  });
   app.get('/policy', async () => state.activePolicy);
 
   app.get('/signals/latest', async (_req, reply) =>
@@ -57,8 +191,8 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
 
   app.get('/vault/state', async () => readVaultStateCached());
 
-  app.post<{ Body: { active?: boolean } }>('/scenario/stress', async (req) => {
-    state.scenarioStress = req.body?.active ?? true;
+  app.post('/runs', async (req, reply) => {
+    if (!authorize(req, reply)) return reply;
     await scheduler.runNow();
     return {
       snapshot: state.latestSnapshot,
@@ -69,9 +203,11 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
   });
 
   app.post<{ Body: { runId?: string; approver?: string } }>('/approve', async (req, reply) => {
+    if (!authorize(req, reply)) return reply;
     const { runId, approver } = req.body ?? {};
     if (!runId) return reply.code(400).send({ error: 'runId required' });
-    if (!state.pendingRun || state.pendingRun.runId !== runId) {
+    const pending = state.pendingRun ?? (await audit.getPendingApproval(runId));
+    if (!pending || pending.runId !== runId) {
       return reply.code(409).send({ error: 'no run awaiting approval with that id' });
     }
     try {
@@ -83,4 +219,28 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
   });
 
   return app;
+}
+
+function authorize(req: FastifyRequest, reply: FastifyReply): boolean {
+  if (!config.api.adminToken) return true;
+  const auth = req.headers.authorization ?? '';
+  if (auth !== `Bearer ${config.api.adminToken}`) {
+    reply.code(401).send({ error: 'unauthorized' });
+    return false;
+  }
+  return true;
+}
+
+function summarizeRuns(runs: Awaited<ReturnType<OrchestratorDeps['audit']['listRuns']>>): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const run of runs) {
+    const labels = `status="${metricLabel(run.status)}",action="${metricLabel(run.action ?? 'none')}"`;
+    counts.set(labels, (counts.get(labels) ?? 0) + 1);
+  }
+  if (counts.size === 0) counts.set('status="none",action="none"', 0);
+  return counts;
+}
+
+function metricLabel(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
 }
