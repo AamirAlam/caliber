@@ -40,7 +40,6 @@ export default function DashboardPage() {
   const [feedStatus, setFeedStatus] = useState<FeedStatus | null>(null);
   const [workspaceRuns, setWorkspaceRuns] = useState<AgentRunLog[]>([]);
   const [workspaceRecommendation, setWorkspaceRecommendation] = useState<Recommendation | null>(null);
-  const [pendingRunId, setPendingRunId] = useState<string | null>(null);
   const [deployHash, setDeployHash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +65,6 @@ export default function DashboardPage() {
       setSnapshot(null);
       setRisk(null);
       setVault(null);
-      setPendingRunId(null);
       return;
     }
     setLive(true);
@@ -169,37 +167,10 @@ export default function DashboardPage() {
     setConnectedAddress(null);
     setManualAddress('');
     setWalletPermissionConfirmed(false);
-    setPendingRunId(null);
-  };
-
-  const onRunNow = async () => {
-    if (!wallet) {
-      setWalletError('Connect the treasury wallet before running the agent.');
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    setDeployHash(null);
-    try {
-      const res = await api.runNow(workspace?.id);
-      setPendingRunId(res.pendingRunId);
-      await refresh();
-      if (workspace?.id) {
-        const runs = (await api.getRuns(workspace.id)) ?? [];
-        setWorkspaceRuns(runs);
-        const latest = runs[0];
-        const detail = latest ? await api.getRun(latest.id) : null;
-        setWorkspaceRecommendation(detail?.recommendation ?? null);
-      }
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy(false);
-    }
   };
 
   const onApprove = async () => {
-    const runId = pendingRunId ?? (workspaceRecommendation?.action === 'rebalance' ? workspaceRecommendation.runId : null);
+    const runId = workspaceRecommendation?.action === 'rebalance' ? workspaceRecommendation.runId : null;
     if (!runId || !workspace || !wallet) return;
     setBusy(true);
     setError(null);
@@ -207,7 +178,6 @@ export default function DashboardPage() {
       const approval = await signApproval(runId, workspace.id, wallet);
       const res = await api.approve(runId, workspace.id, approval);
       setDeployHash(res.tx.deployHash ?? null);
-      setPendingRunId(null);
       await refresh();
       const runs = (await api.getRuns(workspace.id)) ?? [];
       setWorkspaceRuns(runs);
@@ -279,7 +249,7 @@ export default function DashboardPage() {
       : 'Read-only';
   const walletStatusDetail = wallet
     ? walletOwnsWorkspace
-      ? 'Run analysis and approve actions for this treasury.'
+      ? 'Review agent decisions and approve on-chain actions for this treasury.'
       : 'Connected wallet does not own this treasury.'
     : connectedAddress
       ? 'Wallet address detected. Create the dashboard session.'
@@ -290,7 +260,7 @@ export default function DashboardPage() {
     { label: 'Workspace', value: 'Active', active: true },
     { label: 'Policy', value: `${workspace.policy.maxRiskScore}/100 risk`, active: true },
     { label: 'Feed', value: signalFreshness.status, active: signalFreshness.active },
-    { label: 'Agent', value: hasWorkspaceAnalysis ? 'Decision recorded' : 'Ready to run', active: hasWorkspaceAnalysis },
+    { label: 'Agent', value: hasWorkspaceAnalysis ? 'Decision recorded' : 'Monitoring policy', active: true },
   ];
 
   return (
@@ -416,7 +386,7 @@ export default function DashboardPage() {
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
                   {currentDecision
                     ? currentDecision.explanation
-                    : 'The treasury policy is active. Run the agent when you want Caliber to collect live signals, score risk, and produce a decision for this workspace.'}
+                    : 'The treasury policy is active. Caliber will show the latest agent decision here after the backend completes an analysis run for this workspace.'}
                 </p>
               </div>
               <div className="px-5 pb-5 sm:p-5 sm:pl-0">
@@ -563,15 +533,7 @@ export default function DashboardPage() {
               >
                 {busy ? 'Submitting…' : 'Approve & settle on Casper'}
               </button>
-            ) : walletOwnsWorkspace ? (
-              <button
-                onClick={onRunNow}
-                disabled={busy || !live}
-                className="btn-primary mt-5 w-full shadow-pop disabled:opacity-40"
-              >
-                {busy ? 'Running…' : hasWorkspaceAnalysis ? 'Run new analysis' : 'Run analysis'}
-              </button>
-            ) : (
+            ) : !walletOwnsWorkspace && currentDecision?.action === 'rebalance' ? (
               <button
                 onClick={onConnectWallet}
                 disabled={walletPermissionConfirmed && !walletHasPublicKeyInput}
@@ -579,6 +541,17 @@ export default function DashboardPage() {
               >
                 {walletPermissionConfirmed ? 'Use pasted public key' : 'Connect wallet'}
               </button>
+            ) : (
+              <div className="mt-5 rounded-xl border border-slate-900/[0.07] bg-slate-50 px-3 py-3">
+                <p className="text-sm font-semibold text-ink-900">
+                  {currentDecision ? 'No wallet action required' : 'Waiting for backend analysis'}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                  {currentDecision
+                    ? 'The latest decision does not require an on-chain approval.'
+                    : 'The agent runs in the backend. A recommendation will appear here only after a workspace-specific decision is available.'}
+                </p>
+              </div>
             )}
             {!walletOwnsWorkspace && currentDecision?.action === 'rebalance' && (
               <p className="mt-3 text-xs text-slate-500">
