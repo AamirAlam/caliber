@@ -1,131 +1,75 @@
-type Item =
-  | { kind: 'label'; text: string }
-  | { kind: 'step'; n: string; title: string; desc: string; tools: string[] };
-
-const items: Item[] = [
-  { kind: 'label', text: 'Off-chain — Caliber agent' },
-  { kind: 'step', n: '01', title: 'Ingest signals', desc: 'Live market and RWA data is pulled in continuously.', tools: ['HTTP signal feed', 'CSPR.cloud-ready'] },
-  { kind: 'step', n: '02', title: 'Reason & score risk', desc: 'The agent assesses liquidity and risk against the mandate.', tools: ['Caliber agent'] },
-  { kind: 'step', n: '03', title: 'Check policy guardrails', desc: 'Deterministic rules approve, hold, or halt the action.', tools: ['Caliber agent'] },
-  { kind: 'label', text: 'On-chain — Casper' },
-  { kind: 'step', n: '04', title: 'Sign the approved action', desc: 'The rebalance is signed before anything is submitted.', tools: ['casper-js-sdk'] },
-  { kind: 'step', n: '05', title: 'Submit to Casper', desc: 'The deploy is broadcast and executed on the network.', tools: ['casper-js-sdk', 'Casper RPC'] },
-  { kind: 'step', n: '06', title: 'Record & audit', desc: 'CaliberVault stores the rebalance and emits an audit event.', tools: ['Odra · CaliberVault'] },
+const layers = [
+  {
+    label: 'Signal layer',
+    title: 'Self-managed feed',
+    body: 'Caliber reads the deployed signal endpoint and tracks freshness before agent runs.',
+  },
+  {
+    label: 'Reasoning layer',
+    title: 'Policy agent',
+    body: 'The backend evaluates risk, allocation drift, liquidity, and configured treasury limits.',
+  },
+  {
+    label: 'Settlement layer',
+    title: 'Casper execution',
+    body: 'Approved actions are signed through the owner wallet and submitted through Casper tooling.',
+  },
 ];
 
-const toolkit = [
-  { label: 'Odra', desc: 'Implemented: CaliberVault contract, owner-gated audit events.' },
-  { label: 'casper-js-sdk', desc: 'Implemented: signs and submits record_rebalance deploys.' },
-  { label: 'Casper MCP Server', desc: 'Implemented as optional agent tools for on-chain context.' },
-  { label: 'CSPR.cloud', desc: 'Planned signal and chain-data provider for hosted deployments.' },
-  { label: 'x402 Facilitator', desc: 'Planned paid signal-feed access for agent-to-service requests.' },
-  { label: 'CSPR.click', desc: 'Wallet-based approval path for treasury operators.' },
-];
+const stack = ['Odra contract', 'casper-js-sdk', 'Casper RPC', 'Wallet session', 'Policy engine', 'Audit trail'];
 
 export function Architecture() {
   return (
     <section id="architecture" className="py-20 md:py-28">
       <div className="container-caliber">
-        <p className="eyebrow">Architecture</p>
-        <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tighter2 text-ink-900 md:text-[2.6rem] md:leading-[1.1]">
-          Designed on Casper, powered by the agentic toolkit.
-        </h2>
-        <p className="mt-4 max-w-2xl text-slate-600">
-          An off-chain reasoning loop that settles every approved decision on Casper — composing the
-          native{' '}
-          <a
-            href="https://www.casper.network/ai#toolkit"
-            target="_blank"
-            rel="noreferrer"
-            className="font-medium text-brand-600 underline-offset-4 hover:underline"
-          >
-            Casper agentic toolkit
-          </a>{' '}
-          at each step.
-        </p>
+        <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:items-start">
+          <div>
+            <p className="eyebrow">Architecture</p>
+            <h2 className="mt-3 max-w-xl text-3xl font-semibold tracking-tighter2 text-ink-900 md:text-[2.6rem] md:leading-[1.1]">
+              Off-chain intelligence, on-chain accountability.
+            </h2>
+            <p className="mt-4 max-w-lg text-sm leading-relaxed text-slate-600">
+              Caliber keeps the agent loop off-chain where analysis can iterate quickly, then moves
+              only approved, policy-valid actions through Casper testnet settlement and audit.
+            </p>
+          </div>
 
-        <div className="mt-12 max-w-2xl">
-          {items.map((item, i) =>
-            item.kind === 'label' ? (
-              <LabelRow key={`l${i}`} text={item.text} delay={i * 0.32} />
-            ) : (
-              <StepRow key={item.n} item={item} delay={i * 0.32} />
-            ),
-          )}
-        </div>
-
-        <h3 className="mt-16 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-          Toolkit
-        </h3>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {toolkit.map((t) => (
-            <div key={t.label} className="panel p-5">
-              <span className="font-mono text-xs font-semibold text-brand-600">{t.label}</span>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">{t.desc}</p>
+          <div className="rounded-2xl border border-slate-900/[0.07] bg-white p-5 shadow-card dark:border-white/10 dark:bg-[#141b2b]">
+            <div className="grid gap-3">
+              {layers.map((layer, index) => (
+                <div key={layer.label} className="grid gap-4 rounded-xl bg-slate-50 p-4 dark:bg-white/[0.04] sm:grid-cols-[120px_1fr]">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-600">
+                      {layer.label}
+                    </p>
+                    <p className="tnum mt-2 text-xs text-slate-400">{String(index + 1).padStart(2, '0')}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold text-ink-900">{layer.title}</h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{layer.body}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+
+            <div className="mt-5 border-t border-slate-900/[0.06] pt-5 dark:border-white/10">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                Product stack
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {stack.map((item) => (
+                  <span
+                    key={item}
+                    className="rounded-full border border-slate-900/[0.07] bg-white px-3 py-1.5 font-mono text-[11px] text-slate-600 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-300"
+                  >
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
-  );
-}
-
-function Rail({ delay }: { delay: number }) {
-  return (
-    <span className="flow-track">
-      <span className="flow-pulse" style={{ animationDelay: `${delay}s` }} />
-    </span>
-  );
-}
-
-function LabelRow({ text, delay }: { text: string; delay: number }) {
-  return (
-    <div className="flex gap-5">
-      <div className="relative w-4 shrink-0">
-        <Rail delay={delay} />
-        <span className="absolute left-1/2 top-1 z-10 h-3 w-3 -translate-x-1/2 rounded-full border-2 border-brand-400 bg-white" />
-      </div>
-      <div className="pb-4 pt-0.5">
-        <span className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
-          {text}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function StepRow({
-  item,
-  delay,
-}: {
-  item: Extract<Item, { kind: 'step' }>;
-  delay: number;
-}) {
-  return (
-    <div className="flex gap-5">
-      <div className="relative w-4 shrink-0">
-        <Rail delay={delay} />
-        <span className="flow-node absolute left-1/2 top-4 z-10 flex h-4 w-4 -translate-x-1/2 items-center justify-center rounded-full border-2 border-brand-500 bg-white">
-          <span className="h-1 w-1 rounded-full bg-brand-500" />
-        </span>
-      </div>
-      <div className="mb-3 flex-1 panel p-4">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xs font-semibold text-brand-600">{item.n}</span>
-          <h4 className="text-sm font-semibold text-ink-900">{item.title}</h4>
-        </div>
-        <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{item.desc}</p>
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {item.tools.map((t) => (
-            <span
-              key={t}
-              className="rounded-md border border-slate-900/[0.07] bg-slate-50 px-2 py-0.5 font-mono text-[11px] text-slate-600"
-            >
-              {t}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
