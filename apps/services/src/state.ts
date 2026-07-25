@@ -9,6 +9,8 @@ import type {
 /** A run paused at `await_approval`, holding the candidate move + an approval token. */
 export interface PendingRun {
   runId: string;
+  workspaceId?: string;
+  policy?: TreasuryPolicy;
   recommendation: Recommendation;
   rebalance: RebalanceRequest;
   /** Opaque token the executor requires before submitting on-chain. */

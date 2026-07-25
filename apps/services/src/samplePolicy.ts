@@ -2,10 +2,10 @@ import type { TreasuryPolicy } from '@caliber/shared';
 
 /** Development-only fallback. Deployed modes load config/testnet-policy.json. */
 export const samplePolicy: TreasuryPolicy = {
-  id: 'pol_demo',
+  id: 'pol_local',
   name: 'Conservative RWA Treasury',
   version: 1,
-  owner: 'account-hash-0000demo',
+  owner: 'account-hash-0000local',
   allocations: [
     {
       assetId: 'tbill-rwa',

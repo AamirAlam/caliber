@@ -9,7 +9,7 @@ fn deploy() -> (HostEnv, CaliberVaultHostRef) {
     let owner = env.get_account(0);
     env.set_caller(owner);
     let contract =
-        CaliberVault::deploy(&env, CaliberVaultInitArgs { owner, policy_ref: "policy:demo".to_string() });
+        CaliberVault::deploy(&env, CaliberVaultInitArgs { owner, policy_ref: "policy:testnet".to_string() });
     (env, contract)
 }
 

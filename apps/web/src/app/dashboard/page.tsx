@@ -7,7 +7,16 @@ import type { Recommendation, RiskScore, SignalSnapshot, TraceStep, TreasuryPoli
 import { api, type VaultState } from '@/lib/api';
 import { PageLoader } from '@/components/Spinner';
 import { MaintenanceMode } from '@/components/MaintenanceMode';
-import { getWorkspace, type TreasuryWorkspace } from '@/lib/workspaces';
+import { activateWorkspace, getWorkspace, type TreasuryWorkspace } from '@/lib/workspaces';
+import {
+  authenticateWallet,
+  connectWalletProvider,
+  disconnectWallet,
+  hasWalletProvider,
+  loadWalletSession,
+  signApproval,
+} from '@/lib/walletClient';
+import type { WalletSession } from '@/lib/walletAuth';
 
 const EXPLORER = process.env.NEXT_PUBLIC_EXPLORER_BASE ?? 'https://testnet.cspr.live';
 
@@ -21,6 +30,7 @@ const BANDS = {
 export default function DashboardPage() {
   const [policy, setPolicy] = useState<TreasuryPolicy | null>(null);
   const [workspace, setWorkspace] = useState<TreasuryWorkspace | null>(null);
+  const [workspaceResolved, setWorkspaceResolved] = useState(false);
   const [snapshot, setSnapshot] = useState<SignalSnapshot | null>(null);
   const [risk, setRisk] = useState<RiskScore | null>(null);
   const [rec, setRec] = useState<Recommendation | null>(null);
@@ -31,10 +41,11 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(true);
   const [showReasoning, setShowReasoning] = useState(false);
-  const [operator, setOperator] = useState(false);
-  const [unlockOpen, setUnlockOpen] = useState(false);
-  const [operatorCode, setOperatorCode] = useState('');
-  const [operatorError, setOperatorError] = useState<string | null>(null);
+  const [wallet, setWallet] = useState<WalletSession | null>(null);
+  const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
+  const [manualAddress, setManualAddress] = useState('');
+  const [walletPermissionConfirmed, setWalletPermissionConfirmed] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const [p, s, r, rc, v] = await Promise.all([
@@ -68,48 +79,67 @@ export default function DashboardPage() {
     const workspaceId = new URLSearchParams(window.location.search).get('workspace');
     const localWorkspace = getWorkspace(workspaceId);
     setWorkspace(localWorkspace);
+    setWorkspaceResolved(Boolean(localWorkspace) || !workspaceId);
     if (workspaceId && !localWorkspace) {
       void api.getWorkspace(workspaceId).then((remoteWorkspace) => {
-        if (remoteWorkspace) setWorkspace(remoteWorkspace);
+        if (remoteWorkspace) {
+          activateWorkspace(remoteWorkspace);
+          setWorkspace(remoteWorkspace);
+        }
+        setWorkspaceResolved(true);
       });
     }
-    void fetch('/api/operator/session', { cache: 'no-store' })
-      .then((res) => res.json())
-      .then((body: { operator?: boolean }) => setOperator(Boolean(body.operator)))
-      .catch(() => setOperator(false));
+    void loadWalletSession()
+      .then((session) => {
+        setWallet(session);
+        setConnectedAddress(session?.accountHash ?? null);
+        setWalletPermissionConfirmed(Boolean(session));
+      })
+      .catch(() => setWallet(null));
     void refresh();
     const t = setInterval(() => void refresh(), 4000);
     return () => clearInterval(t);
   }, [refresh]);
 
-  const unlockOperator = async () => {
-    setOperatorError(null);
-    const res = await fetch('/api/operator/session', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ code: operatorCode }),
-    });
-    if (!res.ok) {
-      setOperatorError('Operator code was not accepted.');
-      return;
+  const onConnectWallet = async () => {
+    setWalletError(null);
+    try {
+      const publicKey = connectedAddress ?? manualAddress.trim();
+      if (publicKey) {
+        setConnectedAddress(publicKey);
+        setWallet(await authenticateWallet(publicKey));
+        return;
+      }
+      const connectedPublicKey = await connectWalletProvider();
+      setWalletPermissionConfirmed(true);
+      if (!connectedPublicKey) return;
+      setConnectedAddress(connectedPublicKey);
+      setWallet(await authenticateWallet(connectedPublicKey));
+    } catch (error) {
+      setWalletPermissionConfirmed(true);
+      setWalletError(String(error));
     }
-    setOperator(true);
-    setUnlockOpen(false);
-    setOperatorCode('');
   };
 
-  const lockOperator = async () => {
-    await fetch('/api/operator/session', { method: 'DELETE' }).catch(() => undefined);
-    setOperator(false);
+  const onDisconnectWallet = async () => {
+    await disconnectWallet();
+    setWallet(null);
+    setConnectedAddress(null);
+    setManualAddress('');
+    setWalletPermissionConfirmed(false);
     setPendingRunId(null);
   };
 
   const onRunNow = async () => {
+    if (!wallet) {
+      setWalletError('Connect the treasury wallet before running the agent.');
+      return;
+    }
     setBusy(true);
     setError(null);
     setDeployHash(null);
     try {
-      const res = await api.runNow();
+      const res = await api.runNow(workspace?.id);
       setPendingRunId(res.pendingRunId);
       await refresh();
     } catch (e) {
@@ -121,11 +151,12 @@ export default function DashboardPage() {
 
   const onApprove = async () => {
     const runId = pendingRunId ?? (rec?.action === 'rebalance' ? rec.runId : null);
-    if (!runId) return;
+    if (!runId || !workspace || !wallet) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await api.approve(runId);
+      const approval = await signApproval(runId, workspace.id, wallet);
+      const res = await api.approve(runId, workspace.id, approval);
       setDeployHash(res.tx.deployHash ?? null);
       setPendingRunId(null);
       await refresh();
@@ -147,7 +178,27 @@ export default function DashboardPage() {
     return <PageLoader />;
   }
 
-  const canApprove = live && operator && rec?.action === 'rebalance';
+  if (!workspaceResolved) return <PageLoader />;
+  if (!workspace) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
+        <p className="eyebrow">Treasury control plane</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tightish text-ink-900">
+          Connect a treasury workspace
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">
+          Caliber requires a persisted workspace before it can run agents, apply policy, request approval, or write audit records.
+        </p>
+        <Link href="/onboarding" className="btn-primary mt-6">
+          Create workspace
+        </Link>
+      </div>
+    );
+  }
+
+  const walletOwnsWorkspace =
+    wallet && (workspace.ownerAccount === wallet.accountHash || workspace.ownerAccount === wallet.publicKey);
+  const canApprove = live && Boolean(walletOwnsWorkspace) && rec?.action === 'rebalance';
   const headline =
     rec?.action === 'rebalance'
       ? 'Rebalance recommended'
@@ -155,10 +206,8 @@ export default function DashboardPage() {
         ? 'Halted — review required'
         : 'Holding — within policy';
 
-  const workspaceTitle = workspace?.name ?? policy.name;
-  const workspacePolicy = workspace
-    ? `${workspace.policy.rwaTarget}% RWA / ${workspace.policy.stableTarget}% stable / ${workspace.policy.nativeTarget}% CSPR`
-    : 'Default testnet policy';
+  const workspaceTitle = workspace.name;
+  const workspacePolicy = `${workspace.policy.rwaTarget}% RWA / ${workspace.policy.stableTarget}% stable / ${workspace.policy.nativeTarget}% CSPR`;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 pb-28 sm:px-6 sm:py-8 lg:px-8 lg:py-10 lg:pb-10">
@@ -182,75 +231,63 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-ink-900">
-              {operator ? 'Operator controls unlocked' : 'Public testnet workspace'}
+              {wallet
+                ? 'Treasury wallet connected'
+                : walletPermissionConfirmed
+                  ? 'Wallet permission confirmed'
+                  : 'Read-only treasury view'}
             </p>
             <p className="mt-0.5 text-sm text-slate-500">
-              {operator
-                ? 'You can trigger runs and approve policy-gated rebalances for this treasury.'
-                : 'Visitors can inspect live signals, policy checks, and audit history. Execution requires treasury-operator access.'}
+              {wallet
+                ? walletOwnsWorkspace
+                  ? 'You can trigger runs and sign approvals for this treasury.'
+                  : 'This wallet is connected, but it does not own the selected treasury.'
+                  : connectedAddress
+                  ? 'Wallet connected. Sign the Caliber message to finish authentication.'
+                  : walletPermissionConfirmed
+                    ? 'Paste the wallet public key, then authenticate.'
+                : 'Connect the treasury wallet to create runs or approve policy-gated rebalances.'}
             </p>
+            {connectedAddress && (
+              <p className="mt-1 break-all font-mono text-xs text-slate-500">
+                {connectedAddress}
+              </p>
+            )}
+            {walletPermissionConfirmed && !connectedAddress && !wallet && (
+              <input
+                className="input mt-3 font-mono text-xs"
+                value={manualAddress}
+                onChange={(event) => setManualAddress(event.target.value)}
+                placeholder="Public key, e.g. 01..."
+              />
+            )}
           </div>
-          {operator ? (
-            <button onClick={lockOperator} className="btn-secondary w-full sm:w-auto">
-              Lock controls
+          {wallet ? (
+            <button onClick={onDisconnectWallet} className="btn-ghost w-full sm:w-auto">
+              Disconnect wallet
             </button>
           ) : (
-            <button onClick={() => setUnlockOpen(true)} className="btn-secondary w-full sm:w-auto">
-              Unlock operator controls
+            <button onClick={onConnectWallet} className="btn-ghost w-full sm:w-auto">
+              {connectedAddress || walletPermissionConfirmed ? 'Authenticate wallet' : 'Connect wallet'}
             </button>
           )}
         </div>
+        {walletError && <p className="mt-2 text-sm text-signal-rose">{walletError}</p>}
+        {!hasWalletProvider() && (
+          <p className="mt-2 text-xs text-slate-500">
+            Install or unlock a Casper wallet extension to operate this treasury.
+          </p>
+        )}
       </section>
 
-      {!workspace && (
-        <section className="mt-4 rounded-xl border border-brand-100 bg-brand-50/60 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-ink-900">No workspace selected</p>
-              <p className="mt-0.5 text-sm text-slate-600">
-                You are viewing the shared testnet workspace. Create your own treasury setup to personalize policy and data-source context.
-              </p>
-            </div>
-            <Link href="/onboarding" className="btn-primary w-full sm:w-auto">
-              Create workspace
-            </Link>
-          </div>
-        </section>
-      )}
-
-      {workspace && (
-        <section className="mt-4 grid gap-3 rounded-xl border border-slate-900/[0.07] bg-white p-4 shadow-sm sm:grid-cols-3">
-          <WorkspaceFact label="Owner" value={workspace.ownerAccount || 'Not connected'} />
-          <WorkspaceFact label="Vault" value={`${workspace.vaultContractHash.slice(0, 10)}...${workspace.vaultContractHash.slice(-8)}`} />
-          <WorkspaceFact
-            label="Signals"
-            value={workspace.signals.mode === 'operator' ? 'Built-in testnet feed' : workspace.signals.feedUrl || 'External feed'}
-          />
-        </section>
-      )}
-
-      {unlockOpen && (
-        <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/50 p-4">
-          <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-            <label className="block">
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Operator code
-              </span>
-              <input
-                value={operatorCode}
-                onChange={(e) => setOperatorCode(e.target.value)}
-                type="password"
-                className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                placeholder="Enter treasury operator code"
-              />
-            </label>
-            <button onClick={unlockOperator} className="btn-primary">
-              Unlock
-            </button>
-          </div>
-          {operatorError && <p className="mt-2 text-sm text-signal-rose">{operatorError}</p>}
-        </div>
-      )}
+      <section className="mt-4 grid gap-3 rounded-xl border border-slate-900/[0.07] bg-white p-4 shadow-sm sm:grid-cols-3">
+        <WorkspaceFact label="Owner" value={workspace.ownerAccount || 'Not connected'} />
+        <WorkspaceFact label="Vault" value={`${workspace.vaultContractHash.slice(0, 10)}...${workspace.vaultContractHash.slice(-8)}`} />
+        <WorkspaceFact
+          label="Signals"
+          value={workspace.signals.mode === 'operator' ? 'Caliber operator feed' : workspace.signals.feedUrl || 'External feed'}
+        />
+      </section>
 
       {/* ── Decision hero: the single focal element ── */}
       <section className="animate-in mt-6 overflow-hidden rounded-2xl border border-slate-900/[0.07] bg-white shadow-card">
@@ -279,7 +316,7 @@ export default function DashboardPage() {
                 >
                   {busy ? 'Submitting…' : 'Approve & settle on Casper →'}
                 </button>
-              ) : operator ? (
+              ) : walletOwnsWorkspace ? (
                 <button
                   onClick={onRunNow}
                   disabled={busy || !live}
@@ -289,15 +326,15 @@ export default function DashboardPage() {
                 </button>
               ) : (
                 <button
-                  onClick={() => setUnlockOpen(true)}
+                  onClick={onConnectWallet}
                   className="btn-primary w-full shadow-pop sm:w-auto"
                 >
-                  Sign in as operator
+                  Connect wallet
                 </button>
               )}
-              {!operator && rec?.action === 'rebalance' && (
+              {!walletOwnsWorkspace && rec?.action === 'rebalance' && (
                 <span className="text-sm text-slate-500">
-                  Rebalance approval is hidden until operator access is unlocked.
+                  Rebalance approval requires the treasury owner wallet.
                 </span>
               )}
             </div>

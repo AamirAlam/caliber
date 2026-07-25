@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { hasOperatorSession } from '@/lib/operatorAuth';
+import { readWalletSession } from '@/lib/walletAuth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -27,11 +27,12 @@ async function forward(req: NextRequest, path: string[]): Promise<NextResponse> 
   headers.delete('content-length');
   headers.delete('accept-encoding');
   const mutation = req.method !== 'GET' && req.method !== 'HEAD';
-  const publicMutation = req.method === 'POST' && path.join('/') === 'workspaces';
-  if (mutation && !publicMutation && !hasOperatorSession(req)) {
-    return NextResponse.json({ error: 'operator access required' }, { status: 403 });
+  const route = path.join('/');
+  const wallet = readWalletSession(req);
+  if (mutation && !wallet) {
+    return NextResponse.json({ error: 'wallet connection required' }, { status: 403 });
   }
-  if (process.env.CALIBER_ADMIN_TOKEN && mutation && !publicMutation) {
+  if (process.env.CALIBER_ADMIN_TOKEN && mutation) {
     headers.set('authorization', `Bearer ${process.env.CALIBER_ADMIN_TOKEN}`);
   }
 
@@ -43,7 +44,8 @@ async function forward(req: NextRequest, path: string[]): Promise<NextResponse> 
   };
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
-    init.body = await req.text();
+    const raw = await req.text();
+    init.body = wallet ? rewriteMutationBody(route, raw, wallet) : raw;
   }
 
   try {
@@ -65,6 +67,27 @@ async function forward(req: NextRequest, path: string[]): Promise<NextResponse> 
       { status: 502 },
     );
   }
+}
+
+function rewriteMutationBody(
+  route: string,
+  raw: string,
+  wallet: NonNullable<ReturnType<typeof readWalletSession>>,
+): string {
+  const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+  if (route === 'workspaces') {
+    return JSON.stringify({
+      ...body,
+      ownerAccount: wallet.accountHash,
+    });
+  }
+  if (route === 'approve') {
+    return JSON.stringify({
+      ...body,
+      approver: wallet.accountHash,
+    });
+  }
+  return JSON.stringify(body);
 }
 
 export async function GET(

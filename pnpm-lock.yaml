@@ -88,6 +88,9 @@ importers:
       '@caliber/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      casper-js-sdk:
+        specifier: ^5.0.7
+        version: 5.0.12
       next:
         specifier: ^14.2.5
         version: 14.2.35(@opentelemetry/api@1.9.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)

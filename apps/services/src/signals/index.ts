@@ -17,10 +17,9 @@ export interface SignalSource {
 }
 
 /**
- * Operator-curated testnet feed hosted by the services backend itself. These are
- * the real values the team is choosing to demonstrate against on testnet; every
- * response gets a fresh observation timestamp so the normal freshness checks
- * still apply.
+ * Operator-curated Casper testnet feed hosted by the services backend itself.
+ * Every response gets a fresh observation timestamp so the normal freshness
+ * checks still apply.
  */
 export class OperatorSignalSource implements SignalSource {
   readonly name = 'operator-testnet-feed';

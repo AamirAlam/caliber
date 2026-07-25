@@ -26,7 +26,7 @@ fn main() {
 
     let contract = CaliberVault::deploy(
         &env,
-        CaliberVaultInitArgs { owner, policy_ref: "policy:demo".to_string() },
+        CaliberVaultInitArgs { owner, policy_ref: "policy:testnet".to_string() },
     );
 
     println!("\n✅ CaliberVault deployed.");

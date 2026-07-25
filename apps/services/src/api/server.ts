@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import cors from '@fastify/cors';
-import { CreateTreasuryWorkspaceSchema, type TreasuryWorkspace } from '@caliber/shared';
+import { CreateTreasuryWorkspaceSchema, WalletApprovalSchema, type TreasuryWorkspace } from '@caliber/shared';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import casper from 'casper-js-sdk';
 import { config } from '../config.js';
 import { readVaultState, readVaultStateCached } from '../casper/reader.js';
 import { executeApproved, type OrchestratorDeps } from '../orchestrator.js';
 import type { Scheduler } from '../scheduler/index.js';
 import { buildOperatorSignalFeed, HttpSignalSource, validateSignalSet } from '../signals/index.js';
+import { walletApprovalMessage } from './walletMessages.js';
 
 /**
  * Thin HTTP API the dashboard consumes. Reads come from AppState / the audit
@@ -15,7 +17,7 @@ import { buildOperatorSignalFeed, HttpSignalSource, validateSignalSet } from '..
  */
 /**
  * Resolve the CORS `origin` option from config:
- * - `*` (or `true`) → reflect any origin (public read-only demo API).
+ * - `*` (or `true`) → reflect any origin (public read-only API).
  * - comma-separated list → an allowlist of origins.
  * - otherwise → the single origin string.
  */
@@ -209,7 +211,11 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
   app.get('/recommendation/latest', async (_req, reply) =>
     state.latestRecommendation ?? reply.code(404).send({ error: 'no recommendation yet' }),
   );
-  app.get('/runs', async () => audit.listRuns());
+  app.get('/runs', async (req) => {
+    const workspaceId = workspaceIdFromQuery(req);
+    const runs = await audit.listRuns();
+    return workspaceId ? runs.filter((run) => run.workspaceId === workspaceId) : runs;
+  });
 
   // Full detail for one run: the decision reasoning + money flow + transaction.
   app.get<{ Params: { id: string } }>('/runs/:id', async (req, reply) => {
@@ -226,27 +232,55 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
 
   app.get('/vault/state', async () => readVaultStateCached());
 
-  app.post('/runs', async (req, reply) => {
+  app.post<{ Body: { workspaceId?: string } }>('/runs', async (req, reply) => {
     if (!authorize(req, reply)) return reply;
-    await scheduler.runNow();
+    const workspaceId = req.body?.workspaceId;
+    if (!workspaceId) {
+      return reply.code(400).send({ error: 'workspaceId required' });
+    }
+    if (!(await audit.getWorkspace(workspaceId))) {
+      return reply.code(404).send({ error: 'workspace not found' });
+    }
+    await scheduler.runNow({ workspaceId });
     return {
       snapshot: state.latestSnapshot,
       risk: state.latestRisk,
       recommendation: state.latestRecommendation,
       pendingRunId: state.pendingRun?.runId ?? null,
+      workspaceId: state.pendingRun?.workspaceId ?? workspaceId ?? null,
     };
   });
 
-  app.post<{ Body: { runId?: string; approver?: string } }>('/approve', async (req, reply) => {
+  app.post<{ Body: { runId?: string; approver?: string; workspaceId?: string; approval?: unknown } }>('/approve', async (req, reply) => {
     if (!authorize(req, reply)) return reply;
-    const { runId, approver } = req.body ?? {};
+    const { runId, approver, workspaceId } = req.body ?? {};
     if (!runId) return reply.code(400).send({ error: 'runId required' });
+    const approval = WalletApprovalSchema.safeParse(req.body?.approval);
+    if (!approval.success) {
+      return reply.code(400).send({ error: 'wallet approval required' });
+    }
     const pending = state.pendingRun ?? (await audit.getPendingApproval(runId));
     if (!pending || pending.runId !== runId) {
       return reply.code(409).send({ error: 'no run awaiting approval with that id' });
     }
+    if (workspaceId && pending.workspaceId && pending.workspaceId !== workspaceId) {
+      return reply.code(409).send({ error: 'run is awaiting approval for a different workspace' });
+    }
+    const workspace = pending.workspaceId ? await audit.getWorkspace(pending.workspaceId) : undefined;
+    if (workspace && !walletOwnsWorkspace(workspace, approval.data)) {
+      return reply.code(403).send({ error: 'wallet does not own this workspace' });
+    }
+    if (
+      pending.workspaceId &&
+      approval.data.message !== walletApprovalMessage(runId, pending.workspaceId, approval.data.accountHash)
+    ) {
+      return reply.code(400).send({ error: 'wallet approval message mismatch' });
+    }
+    if (!verifyWalletSignature(approval.data.publicKey, approval.data.message, approval.data.signature)) {
+      return reply.code(401).send({ error: 'wallet approval signature invalid' });
+    }
     try {
-      const result = await executeApproved(deps, runId, approver ?? 'dashboard');
+      const result = await executeApproved(deps, runId, approver ?? approval.data.accountHash, workspaceId, approval.data);
       return result;
     } catch (err) {
       return reply.code(502).send({ error: String(err) });
@@ -254,6 +288,28 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
   });
 
   return app;
+}
+
+function walletOwnsWorkspace(
+  workspace: TreasuryWorkspace,
+  approval: { accountHash: string; publicKey: string },
+): boolean {
+  return workspace.ownerAccount === approval.accountHash || workspace.ownerAccount === approval.publicKey;
+}
+
+function verifyWalletSignature(publicKeyHex: string, message: string, signatureHex: string): boolean {
+  try {
+    const publicKey = casper.PublicKey.fromHex(publicKeyHex);
+    const messageBytes = Buffer.from(message, 'utf8');
+    const signatureBytes = Buffer.from(stripHexPrefix(signatureHex), 'hex');
+    return publicKey.verifySignature(messageBytes, signatureBytes);
+  } catch {
+    return false;
+  }
+}
+
+function stripHexPrefix(value: string): string {
+  return value.startsWith('0x') ? value.slice(2) : value;
 }
 
 export async function signalFeedReady(): Promise<void> {
@@ -272,6 +328,11 @@ function authorize(req: FastifyRequest, reply: FastifyReply): boolean {
     return false;
   }
   return true;
+}
+
+function workspaceIdFromQuery(req: FastifyRequest): string | undefined {
+  const query = req.query as { workspaceId?: unknown };
+  return typeof query.workspaceId === 'string' && query.workspaceId ? query.workspaceId : undefined;
 }
 
 function summarizeRuns(runs: Awaited<ReturnType<OrchestratorDeps['audit']['listRuns']>>): Map<string, number> {

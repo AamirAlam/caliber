@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { CaliberMark } from '@/components/SiteHeader';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher';
 
 const nav = [
   { href: '/dashboard', label: 'Home', icon: 'grid' },
@@ -47,6 +48,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             );
           })}
         </nav>
+        <WorkspaceSwitcher />
         <div className="mt-auto p-3">
           <div className="border-t border-slate-900/[0.06] pb-2 pt-2">
             <ThemeToggle variant="nav" />
@@ -72,6 +74,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Link>
           <ThemeToggle />
         </header>
+        <div className="border-b border-slate-900/[0.06] bg-white/70 lg:hidden">
+          <WorkspaceSwitcher compact />
+        </div>
 
         <main className="min-w-0 flex-1">{children}</main>
       </div>

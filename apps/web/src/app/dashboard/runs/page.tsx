@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { activateWorkspace, getWorkspace, type TreasuryWorkspace } from '@/lib/workspaces';
 import { AGENT_ROLES } from '@caliber/shared';
 import type { AgentRunLog } from '@caliber/shared';
 import { api, type RunDetail } from '@/lib/api';
@@ -16,6 +18,7 @@ const prettyAsset = (id: string) =>
 
 export default function RunsPage() {
   const [runs, setRuns] = useState<AgentRunLog[]>([]);
+  const [workspace, setWorkspace] = useState<TreasuryWorkspace | null>(null);
   const [live, setLive] = useState(true);
   const [page, setPage] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -23,7 +26,25 @@ export default function RunsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const rn = await api.getRuns();
+    const workspaceId =
+      typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('workspace');
+    let activeWorkspace = getWorkspace(workspaceId);
+    setWorkspace(activeWorkspace);
+    if (workspaceId && !activeWorkspace) {
+      const remoteWorkspace = await api.getWorkspace(workspaceId);
+      if (remoteWorkspace) {
+        activateWorkspace(remoteWorkspace);
+        activeWorkspace = remoteWorkspace;
+        setWorkspace(remoteWorkspace);
+      }
+    }
+    if (!activeWorkspace) {
+      setRuns([]);
+      setLive(true);
+      setError(null);
+      return;
+    }
+    const rn = await api.getRuns(activeWorkspace?.id);
     if (rn === null) {
       setLive(false);
       setError('The services API is unavailable or not configured.');
@@ -65,6 +86,23 @@ export default function RunsPage() {
     );
   }
 
+  if (!workspace) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
+        <p className="eyebrow">Audit trail</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tightish text-ink-900">
+          Connect a treasury workspace
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">
+          Run history is scoped to a persisted workspace so decisions, approvals, and Casper deploys stay auditable.
+        </p>
+        <Link href="/onboarding" className="btn-primary mt-6">
+          Create workspace
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 pb-28 sm:px-6 sm:py-8 lg:px-8 lg:py-10 lg:pb-10">
       <header className="flex items-center justify-between">
@@ -73,6 +111,9 @@ export default function RunsPage() {
           <h1 className="mt-1.5 text-[1.6rem] font-semibold tracking-tightish text-ink-900">
             Run history
           </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {workspace.name}
+          </p>
         </div>
         <span className="pill border-slate-200 bg-white text-slate-500">
           {runs.length} run{runs.length === 1 ? '' : 's'}

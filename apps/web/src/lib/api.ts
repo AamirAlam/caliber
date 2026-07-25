@@ -7,6 +7,7 @@ import type {
   TreasuryWorkspace,
   TransactionRecord,
   TreasuryPolicy,
+  WalletApproval,
 } from '@caliber/shared';
 
 export interface RunDetail {
@@ -51,20 +52,22 @@ export const api = {
   getLatestSignals: () => get<SignalSnapshot>('/signals/latest'),
   getLatestRisk: () => get<RiskScore>('/risk/latest'),
   getLatestRecommendation: () => get<Recommendation>('/recommendation/latest'),
-  getRuns: () => get<AgentRunLog[]>('/runs'),
+  getRuns: (workspaceId?: string) =>
+    get<AgentRunLog[]>(workspaceId ? `/runs?workspaceId=${encodeURIComponent(workspaceId)}` : '/runs'),
   getRun: (id: string) => get<RunDetail>(`/runs/${id}`),
   getVaultState: () => get<VaultState>('/vault/state'),
   getWorkspaces: () => get<TreasuryWorkspace[]>('/workspaces'),
   getWorkspace: (id: string) => get<TreasuryWorkspace>(`/workspaces/${id}`),
   createWorkspace: (workspace: CreateTreasuryWorkspace) =>
     post<TreasuryWorkspace>('/workspaces', workspace),
-  runNow: () =>
+  runNow: (workspaceId?: string) =>
     post<{
       snapshot: SignalSnapshot | null;
       risk: RiskScore | null;
       recommendation: Recommendation | null;
       pendingRunId: string | null;
-    }>('/runs', {}),
-  approve: (runId: string, approver = 'dashboard') =>
-    post<{ run: AgentRunLog; tx: TransactionRecord }>('/approve', { runId, approver }),
+      workspaceId: string | null;
+    }>('/runs', { workspaceId }),
+  approve: (runId: string, workspaceId: string, approval: WalletApproval) =>
+    post<{ run: AgentRunLog; tx: TransactionRecord }>('/approve', { runId, workspaceId, approval }),
 };

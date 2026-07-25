@@ -21,7 +21,7 @@ decision and transaction verifiable on-chain.
 
 ## Live on Casper testnet
 
-The prototype is deployed and producing real transactions on `casper-test`.
+Caliber is deployed and producing real transactions on `casper-test`.
 
 | | |
 |---|---|
@@ -50,7 +50,7 @@ straight from global state — no off-chain bookkeeping.
   run's signals, decision, rationale, review, and deploy hash are recorded.
 - **Model-agnostic.** The agent runs on the Vercel AI SDK; swap the LLM via config
   (Claude by default). With no API key it falls back to a deterministic decision, so
-  the demo always runs.
+  local and testnet operations can still run end-to-end.
 
 ## How it works
 
@@ -114,7 +114,7 @@ Copy the env templates (done by `scripts/setup.sh`) and fill in as needed:
   agents. Swap providers with `CALIBER_LLM_PROVIDER` / `CALIBER_DECISION_MODEL`. Without a
   key, the deterministic decision path runs.
 - `apps/web/.env.local` — `SERVICES_URL`, `CALIBER_ADMIN_TOKEN`,
-  `OPERATOR_ACCESS_CODE`, `NEXT_PUBLIC_VAULT_CONTRACT_HASH`,
+  `WALLET_SESSION_SECRET`, `NEXT_PUBLIC_VAULT_CONTRACT_HASH`,
   `NEXT_PUBLIC_EXPLORER_BASE`.
 
 ### Vercel + Railway deployment
@@ -135,7 +135,7 @@ The safest production setup is:
   - Set the project root to `apps/web`.
   - Set `SERVICES_URL=https://<your-railway-service>.up.railway.app`.
   - Set the same `CALIBER_ADMIN_TOKEN` so the proxy can authenticate mutations server-to-server.
-  - Set `OPERATOR_ACCESS_CODE`; public visitors stay read-only, and only users with this code can unlock run/approve controls.
+  - Set `WALLET_SESSION_SECRET`; treasury owners connect and sign with their wallet before run/approve controls are available.
   - If `SERVICES_URL` is missing, the Next.js proxy falls back to `http://localhost:4000`, which makes production requests fail with `502`.
   - `NEXT_PUBLIC_SERVICES_URL` is optional now; the frontend uses a Next.js proxy at `/api/caliber`.
 
@@ -161,7 +161,7 @@ Implemented now:
 - **Casper MCP Server** — optional agent tool provider when
   `CALIBER_CASPER_MCP_URL` is set. Caliber also injects a built-in
   `casper_get_vault_state` tool into the agent so every LLM cycle can inspect
-  live Casper vault state. Set `CALIBER_CASPER_MCP_REQUIRED=true` for a demo run
+  live Casper vault state. Set `CALIBER_CASPER_MCP_REQUIRED=true` for an operator run
   that must fail unless the external Casper MCP server is connected. Each
   recommendation trace records MCP status.
 
@@ -169,7 +169,7 @@ Planned launch integrations:
 
 - **CSPR.cloud** for hosted chain data and signal infrastructure.
 - **x402** for paid, verifiable signal-feed requests between agents and data providers.
-- **CSPR.click** for wallet-based human approvals once backend hardening is complete.
+- **CSPR.click** as a launch wallet surface for human approvals and account-based treasury access.
 
 ## Contract surface (`CaliberVault`)
 

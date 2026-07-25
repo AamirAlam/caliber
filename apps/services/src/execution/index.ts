@@ -12,8 +12,8 @@ import { log } from '../logger.js';
  * TransactionV1 that calls the CaliberVault `record_rebalance` entry point, signs
  * it with the agent key, and submits it to the testnet RPC via casper-js-sdk.
  *
- * In `CALIBER_DRY_RUN` mode it returns a synthetic `submitted` record so the full
- * UX is demoable without a funded key.
+ * In `CALIBER_DRY_RUN` mode it returns a synthetic `submitted` record so local
+ * development can exercise the execution path without a funded key.
  */
 export class CasperExecutor {
   async submit(request: RebalanceRequest): Promise<TransactionRecord> {

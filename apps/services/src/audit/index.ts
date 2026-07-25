@@ -4,6 +4,7 @@ import type {
   Recommendation,
   RiskScore,
   SignalSnapshot,
+  TreasuryPolicy,
   TreasuryWorkspace,
   TransactionRecord,
 } from '@caliber/shared';
@@ -37,6 +38,8 @@ export interface AuditStore {
 
 export interface PendingApproval {
   runId: string;
+  workspaceId?: string;
+  policy?: TreasuryPolicy;
   recommendation: Recommendation;
   rebalance: RebalanceRequest;
   approvalToken: string;

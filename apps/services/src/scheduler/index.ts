@@ -1,6 +1,6 @@
 import { config } from '../config.js';
 import { log } from '../logger.js';
-import { runAgentLoop, type OrchestratorDeps } from '../orchestrator.js';
+import { runAgentLoop, type OrchestratorDeps, type RunAgentLoopOptions } from '../orchestrator.js';
 
 /**
  * Drives phase 1 of the agent loop on a fixed interval. Runs are sequential to
@@ -33,17 +33,17 @@ export class Scheduler {
   }
 
   /** Run one loop now, used by the authenticated manual trigger. Returns the seq used. */
-  async runNow(): Promise<number> {
-    await this.tick();
+  async runNow(options: RunAgentLoopOptions = {}): Promise<number> {
+    await this.tick(options);
     return this.seq;
   }
 
-  private async tick(): Promise<void> {
+  private async tick(options: RunAgentLoopOptions = {}): Promise<void> {
     if (this.running) return;
     this.running = true;
     this.lastStartedAt = new Date().toISOString();
     try {
-      await runAgentLoop(this.deps, ++this.seq);
+      await runAgentLoop(this.deps, ++this.seq, options);
       this.lastSucceededAt = new Date().toISOString();
       this.lastError = undefined;
     } catch (err) {

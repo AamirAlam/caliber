@@ -12,7 +12,7 @@ export function CtaFooter() {
           </h2>
           <p className="relative mx-auto mt-4 max-w-xl text-slate-300">
             Create a treasury workspace, define policy guardrails, and let Caliber monitor
-            testnet execution with operator-gated approvals.
+            testnet execution with wallet-gated approvals.
           </p>
           <div className="relative mt-8 flex flex-wrap justify-center gap-3">
             <Link
@@ -25,7 +25,7 @@ export function CtaFooter() {
               href="/dashboard"
               className="inline-flex items-center justify-center rounded-xl border border-white/20 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
             >
-              View testnet workspace
+              Open dashboard
             </Link>
             <a
               href="https://docs.casper.network"

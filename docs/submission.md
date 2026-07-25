@@ -55,7 +55,7 @@ numbers come from the chain, not off-chain bookkeeping.
 
 ## Casper AI Toolkit Usage
 
-Implemented in the submitted prototype:
+Implemented in the submitted product:
 
 - **Odra:** `CaliberVault` is the transaction-producing on-chain component. It
   records approved rebalances, enforces owner-only writes, supports pause/resume,
@@ -66,7 +66,7 @@ Implemented in the submitted prototype:
 - **Casper MCP Server:** when `CALIBER_CASPER_MCP_URL` is configured, MCP tools
   are injected into the Proposer agent. Caliber also provides a built-in
   `casper_get_vault_state` tool backed by live Casper RPC, so the agent always
-  has a concrete Casper state-reading tool. For final demos,
+  has a concrete Casper state-reading tool. For operator runs,
   `CALIBER_CASPER_MCP_REQUIRED=true` makes startup/agent execution fail unless
   the external Casper MCP server is connected. The recommendation trace records
   MCP as connected, disabled, or unavailable.
@@ -76,7 +76,7 @@ Launch roadmap integrations:
 - **CSPR.cloud:** hosted chain-data and signal infrastructure for production
   deployments.
 - **x402:** pay-per-request access to premium RWA and market signal feeds.
-- **CSPR.click:** wallet-based human approval before settlement.
+- **CSPR.click:** wallet-based human approval and account-based treasury access.
 
 ## Run it
 

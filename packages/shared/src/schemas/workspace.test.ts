@@ -32,4 +32,28 @@ describe('TreasuryWorkspaceSchema', () => {
     });
     expect(parsed.id).toBe('workspace_1');
   });
+
+  it('rejects workspace allocations that do not total 100%', () => {
+    expect(() =>
+      CreateTreasuryWorkspaceSchema.parse({
+        ...base,
+        policy: {
+          ...base.policy,
+          nativeTarget: 15,
+        },
+      }),
+    ).toThrow(/allocations must total 100%/);
+  });
+
+  it('requires a feed URL for external signal sources', () => {
+    expect(() =>
+      CreateTreasuryWorkspaceSchema.parse({
+        ...base,
+        signals: {
+          mode: 'external',
+          feedUrl: '',
+        },
+      }),
+    ).toThrow(/external signal mode requires feedUrl/);
+  });
 });

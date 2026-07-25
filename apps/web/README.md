@@ -7,9 +7,8 @@ shell, built with Next.js (App Router), TypeScript, and Tailwind CSS.
 
 - `/` — landing page: hero, product explanation, how it works, architecture
   preview, trust & guardrails, CTA. Design language is institutional and calm.
-- `/dashboard` — read-only public treasury workspace by default. Operator-only
-  controls unlock with a server-side access code before runs or approvals can be
-  submitted.
+- `/dashboard` — treasury monitoring dashboard. Runs and approvals require the
+  connected treasury owner wallet.
 
 ## Develop
 
@@ -25,9 +24,8 @@ pnpm --filter @caliber/web dev    # http://localhost:3000
   reached; it does not substitute mock data.
 - In production, point the built-in proxy at the backend with `SERVICES_URL`.
   Set `CALIBER_ADMIN_TOKEN` on the web deployment so authorized POST requests can
-  be authenticated server-to-server. Set `OPERATOR_ACCESS_CODE` as the dashboard
-  unlock code; without it, public visitors can read data but cannot run or
-  approve agent actions.
+  be authenticated server-to-server. Set `WALLET_SESSION_SECRET` so connected
+  wallet sessions are signed consistently across server instances.
   `NEXT_PUBLIC_SERVICES_URL` is only needed if you intentionally want the browser
   to call the backend directly.
 - Design tokens live in `tailwind.config.ts` (ink base, single teal accent).

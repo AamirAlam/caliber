@@ -2,10 +2,17 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CaliberMark } from '@/components/SiteHeader';
 import { api } from '@/lib/api';
-import { activateWorkspace, workspaceSlug, type TreasuryWorkspace } from '@/lib/workspaces';
+import { activateWorkspace } from '@/lib/workspaces';
+import {
+  authenticateWallet,
+  connectWalletProvider,
+  disconnectWallet,
+  loadWalletSession,
+} from '@/lib/walletClient';
+import type { WalletSession } from '@/lib/walletAuth';
 
 const steps = [
   'Workspace',
@@ -17,11 +24,19 @@ const steps = [
 
 type SourceMode = 'operator' | 'external';
 
+function shortAddress(value: string): string {
+  return value.length > 18 ? `${value.slice(0, 10)}...${value.slice(-8)}` : value;
+}
+
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [workspace, setWorkspace] = useState('RWA Income Treasury');
-  const [owner, setOwner] = useState('');
+  const [wallet, setWallet] = useState<WalletSession | null>(null);
+  const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
+  const [manualAddress, setManualAddress] = useState('');
+  const [walletPermissionConfirmed, setWalletPermissionConfirmed] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
   const [vault, setVault] = useState('5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0');
   const [stableTarget, setStableTarget] = useState(30);
   const [rwaTarget, setRwaTarget] = useState(60);
@@ -33,16 +48,21 @@ export default function OnboardingPage() {
   const [activationError, setActivationError] = useState<string | null>(null);
 
   const totalAllocation = stableTarget + rwaTarget + nativeTarget;
-  const ready = workspace.trim().length > 2 && vault.trim().length > 12 && totalAllocation === 100;
+  const workspaceReady = workspace.trim().length > 2;
+  const vaultReady = vault.trim().length > 12;
+  const allocationReady = totalAllocation === 100;
+  const signalReady = sourceMode === 'operator' || feedUrl.trim().length > 0;
+  const ready = Boolean(wallet) && workspaceReady && vaultReady && allocationReady && signalReady;
   const summary = useMemo(
     () => [
       { label: 'Workspace', value: workspace || 'Unnamed treasury' },
+      { label: 'Owner wallet', value: wallet ? shortAddress(wallet.accountHash) : connectedAddress ? shortAddress(connectedAddress) : 'Not connected' },
       { label: 'Vault', value: vault ? `${vault.slice(0, 10)}...${vault.slice(-8)}` : 'Not connected' },
       { label: 'Policy', value: `${rwaTarget}% RWA / ${stableTarget}% stable / ${nativeTarget}% native` },
       { label: 'Risk ceiling', value: `${riskLimit}/100` },
-      { label: 'Signal source', value: sourceMode === 'operator' ? 'Built-in testnet feed' : feedUrl || 'External feed pending' },
+      { label: 'Signal source', value: sourceMode === 'operator' ? 'Caliber operator feed' : feedUrl || 'External feed pending' },
     ],
-    [feedUrl, nativeTarget, riskLimit, rwaTarget, sourceMode, stableTarget, vault, workspace],
+    [connectedAddress, feedUrl, nativeTarget, riskLimit, rwaTarget, sourceMode, stableTarget, vault, wallet, workspace],
   );
 
   const onActivateWorkspace = async () => {
@@ -51,7 +71,7 @@ export default function OnboardingPage() {
     setActivationError(null);
     const payload = {
       name: workspace.trim(),
-      ownerAccount: owner.trim(),
+      ownerAccount: wallet!.accountHash,
       vaultContractHash: vault.trim(),
       network: 'casper-test',
       policy: {
@@ -71,19 +91,48 @@ export default function OnboardingPage() {
       activateWorkspace(created);
       router.push(`/dashboard?workspace=${encodeURIComponent(created.id)}`);
     } catch (error) {
-      const id = workspaceSlug(workspace);
-      const fallback: TreasuryWorkspace = {
-        ...payload,
-        id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      activateWorkspace(fallback);
-      setActivationError(`Workspace saved locally because the backend could not persist it: ${String(error)}`);
-      router.push(`/dashboard?workspace=${encodeURIComponent(id)}`);
+      setActivationError(`Workspace could not be created: ${String(error)}`);
     } finally {
       setActivating(false);
     }
+  };
+
+  useEffect(() => {
+    void loadWalletSession()
+      .then((session) => {
+        setWallet(session);
+        setConnectedAddress(session?.accountHash ?? null);
+        setWalletPermissionConfirmed(Boolean(session));
+      })
+      .catch(() => setWallet(null));
+  }, []);
+
+  const onConnectWallet = async () => {
+    setWalletError(null);
+    try {
+      const publicKey = connectedAddress ?? manualAddress.trim();
+      if (publicKey) {
+        setConnectedAddress(publicKey);
+        setWallet(await authenticateWallet(publicKey));
+        return;
+      }
+      const connectedPublicKey = await connectWalletProvider();
+      setWalletPermissionConfirmed(true);
+      if (!connectedPublicKey) return;
+      setConnectedAddress(connectedPublicKey);
+      setWallet(await authenticateWallet(connectedPublicKey));
+    } catch (error) {
+      setWalletPermissionConfirmed(true);
+      setWalletError(String(error));
+    }
+  };
+
+  const onDisconnectWallet = async () => {
+    await disconnectWallet();
+    setWallet(null);
+    setConnectedAddress(null);
+    setManualAddress('');
+    setWalletPermissionConfirmed(false);
   };
 
   return (
@@ -94,9 +143,16 @@ export default function OnboardingPage() {
             <CaliberMark />
             <span className="text-sm font-semibold text-ink-900">Caliber</span>
           </Link>
-          <Link href="/dashboard" className="btn-ghost">
-            View testnet workspace
-          </Link>
+          <div className="flex items-center gap-3">
+            {(wallet || connectedAddress) && (
+              <span className="pill border-signal-emerald/30 bg-emerald-50 font-mono text-signal-emerald">
+                {shortAddress(wallet?.accountHash ?? connectedAddress!)}
+              </span>
+            )}
+            <Link href="/dashboard" className="btn-ghost">
+              Open dashboard
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -130,18 +186,10 @@ export default function OnboardingPage() {
             {step === 0 && (
               <SetupBlock
                 title="Create a treasury workspace"
-                description="This becomes the operating room for one treasury, its policy, signal sources, and approval workflow."
+                description="This becomes the operating room for one treasury, its policy, signal sources, and approval workflow. You will connect the owner wallet before activation."
               >
                 <Field label="Workspace name">
                   <input className="input" value={workspace} onChange={(e) => setWorkspace(e.target.value)} />
-                </Field>
-                <Field label="Treasury owner account">
-                  <input
-                    className="input"
-                    value={owner}
-                    onChange={(e) => setOwner(e.target.value)}
-                    placeholder="account-hash-..."
-                  />
                 </Field>
               </SetupBlock>
             )}
@@ -149,7 +197,7 @@ export default function OnboardingPage() {
             {step === 1 && (
               <SetupBlock
                 title="Connect or deploy a vault"
-                description="For final-round testnet we connect the deployed CaliberVault. A full product would let teams deploy a new vault from here."
+                description="Connect a CaliberVault on Casper testnet. Agent runs and approvals will be scoped to this vault and workspace policy."
               >
                 <Field label="CaliberVault package hash">
                   <input className="input font-mono text-xs" value={vault} onChange={(e) => setVault(e.target.value)} />
@@ -178,13 +226,13 @@ export default function OnboardingPage() {
             {step === 3 && (
               <SetupBlock
                 title="Choose signal sources"
-                description="Start with the built-in testnet signal feed, or point Caliber at an external feed when the treasury is ready."
+                description="Use Caliber's operator feed or point this treasury at an external signal feed."
               >
                 <Segmented
                   value={sourceMode}
                   onChange={setSourceMode}
                   options={[
-                    { value: 'operator', label: 'Built-in testnet feed' },
+                    { value: 'operator', label: 'Caliber operator feed' },
                     { value: 'external', label: 'External feed URL' },
                   ]}
                 />
@@ -204,7 +252,7 @@ export default function OnboardingPage() {
             {step === 4 && (
               <SetupBlock
                 title="Review and activate"
-                description="This step turns setup into an operating workspace. Today it opens the live testnet workspace; next we persist this per user."
+                description="Connect the owner wallet, then create the operating workspace on the services backend. Agent runs, approvals, and audit history are scoped to it."
               >
                 <div className="grid gap-3">
                   {summary.map((item) => (
@@ -214,13 +262,58 @@ export default function OnboardingPage() {
                     </div>
                   ))}
                 </div>
+                <div className="rounded-xl border border-slate-900/[0.07] bg-slate-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Treasury owner wallet
+                      </p>
+                      <p className="mt-1 break-all font-mono text-sm text-ink-900">
+                        {wallet?.accountHash ??
+                          connectedAddress ??
+                          (walletPermissionConfirmed ? 'Wallet connected - public key required' : 'No wallet connected')}
+                      </p>
+                      {(wallet || connectedAddress || walletPermissionConfirmed) && (
+                        <p className={`mt-1 text-xs ${wallet || connectedAddress ? 'text-signal-emerald' : 'text-signal-amber'}`}>
+                          {wallet
+                            ? 'Authenticated and ready to own this treasury workspace.'
+                            : connectedAddress
+                              ? 'Wallet connected. Sign the Caliber message to finish authentication.'
+                              : 'Wallet permission is confirmed. Paste the wallet public key below, then authenticate.'}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={wallet ? onDisconnectWallet : onConnectWallet}
+                      className="btn-ghost w-full sm:w-auto"
+                    >
+                      {wallet ? 'Disconnect wallet' : walletPermissionConfirmed || connectedAddress ? 'Authenticate wallet' : 'Connect wallet'}
+                    </button>
+                  </div>
+                  {walletPermissionConfirmed && !connectedAddress && !wallet && (
+                    <input
+                      className="input mt-3 font-mono text-xs"
+                      value={manualAddress}
+                      onChange={(event) => setManualAddress(event.target.value)}
+                      placeholder="Public key, e.g. 01..."
+                    />
+                  )}
+                  {walletError && <p className="mt-2 text-sm text-signal-rose">{walletError}</p>}
+                </div>
                 <button
                   onClick={onActivateWorkspace}
                   disabled={!ready || activating}
                   className="btn-primary mt-6 w-full disabled:opacity-40"
                 >
-                  {activating ? 'Activating...' : 'Activate testnet workspace'}
+                  {activating ? 'Activating...' : 'Activate workspace'}
                 </button>
+                {!ready && <ActivationChecklist
+                  walletReady={Boolean(wallet)}
+                  workspaceReady={workspaceReady}
+                  vaultReady={vaultReady}
+                  allocationReady={allocationReady}
+                  signalReady={signalReady}
+                />}
                 {activationError && <p className="mt-2 text-sm text-signal-amber">{activationError}</p>}
               </SetupBlock>
             )}
@@ -248,11 +341,43 @@ export default function OnboardingPage() {
             ))}
           </div>
           <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-slate-600">
-            Operator actions remain locked until a treasury operator signs in from the dashboard.
+            Agent runs and approvals are locked to the connected treasury owner wallet.
           </div>
         </aside>
       </div>
     </main>
+  );
+}
+
+function ActivationChecklist({
+  walletReady,
+  workspaceReady,
+  vaultReady,
+  allocationReady,
+  signalReady,
+}: {
+  walletReady: boolean;
+  workspaceReady: boolean;
+  vaultReady: boolean;
+  allocationReady: boolean;
+  signalReady: boolean;
+}) {
+  const items = [
+    { label: 'Authenticate treasury owner wallet', ok: walletReady },
+    { label: 'Name the workspace', ok: workspaceReady },
+    { label: 'Connect a vault package hash', ok: vaultReady },
+    { label: 'Set allocations to 100%', ok: allocationReady },
+    { label: 'Choose a valid signal source', ok: signalReady },
+  ];
+  return (
+    <div className="mt-4 grid gap-2 rounded-xl border border-slate-900/[0.07] bg-slate-50 p-3 text-sm">
+      {items.map((item) => (
+        <div key={item.label} className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${item.ok ? 'bg-signal-emerald' : 'bg-slate-300'}`} />
+          <span className={item.ok ? 'text-slate-500' : 'text-slate-700'}>{item.label}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 

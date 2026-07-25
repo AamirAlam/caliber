@@ -1,9 +1,9 @@
 import type { Signal, SignalSnapshot, TreasuryPolicy, RebalanceRequest } from '@caliber/shared';
 
 /**
- * Notional total treasury value (USD). The demo derives current allocation
- * weights from the liquidity signal against this constant. A real deployment
- * would read live balances on-chain.
+ * Notional total treasury value (USD). Current allocation weights are derived
+ * from the liquidity signal against this constant until per-vault balance reads
+ * are wired into the policy engine.
  */
 export const TOTAL_TREASURY_USD = 1_200_000;
 

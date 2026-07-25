@@ -19,7 +19,7 @@ const toolkit = [
   { label: 'Casper MCP Server', desc: 'Implemented as optional agent tools for on-chain context.' },
   { label: 'CSPR.cloud', desc: 'Planned signal and chain-data provider for hosted deployments.' },
   { label: 'x402 Facilitator', desc: 'Planned paid signal-feed access for agent-to-service requests.' },
-  { label: 'CSPR.click', desc: 'Planned wallet-based approval flow after backend hardening.' },
+  { label: 'CSPR.click', desc: 'Wallet-based approval path for treasury operators.' },
 ];
 
 export function Architecture() {

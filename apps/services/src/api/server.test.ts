@@ -6,7 +6,7 @@ import type { Scheduler } from '../scheduler/index.js';
 import { AppState } from '../state.js';
 import { buildServer } from './server.js';
 
-function scheduler(): Scheduler {
+function scheduler(seenOptions: Array<{ workspaceId?: string }> = []): Scheduler {
   return {
     status: () => ({
       running: false,
@@ -17,13 +17,17 @@ function scheduler(): Scheduler {
       lastFailedAt: undefined,
       lastError: undefined,
     }),
-    runNow: async () => 7,
+    runNow: async (options?: { workspaceId?: string }) => {
+      seenOptions.push(options ?? {});
+      return 7;
+    },
   } as Scheduler;
 }
 
 async function testServer() {
   const audit = new InMemoryAuditStore();
   const state = new AppState(samplePolicy);
+  const seenSchedulerOptions: Array<{ workspaceId?: string }> = [];
   const app = buildServer(
     {
       audit,
@@ -36,9 +40,9 @@ async function testServer() {
         waitForFinalization: async () => 'pending',
       },
     },
-    scheduler(),
+    scheduler(seenSchedulerOptions),
   );
-  return { app, audit, state };
+  return { app, audit, state, seenSchedulerOptions };
 }
 
 describe('service observability API', () => {
@@ -132,6 +136,177 @@ describe('service observability API', () => {
       payload: { name: '' },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('filters runs by workspace id', async () => {
+    const { app, audit } = await testServer();
+    await audit.saveRun({
+      id: 'run_a',
+      policyId: samplePolicy.id,
+      workspaceId: 'workspace_a',
+      stage: 'done',
+      status: 'completed',
+      action: 'hold',
+      startedAt: '2026-07-20T00:00:00.000Z',
+    });
+    await audit.saveRun({
+      id: 'run_b',
+      policyId: samplePolicy.id,
+      workspaceId: 'workspace_b',
+      stage: 'done',
+      status: 'completed',
+      action: 'hold',
+      startedAt: '2026-07-20T00:01:00.000Z',
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/runs?workspaceId=workspace_a' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject([{ id: 'run_a', workspaceId: 'workspace_a' }]);
+  });
+
+  it('passes workspace id into manual run triggers', async () => {
+    const { app, audit, seenSchedulerOptions } = await testServer();
+    await audit.saveWorkspace({
+      id: 'workspace_1',
+      name: 'RWA Income Treasury',
+      ownerAccount: 'account-hash-test',
+      vaultContractHash: 'contract-package-test',
+      network: 'casper-test',
+      policy: {
+        rwaTarget: 60,
+        stableTarget: 30,
+        nativeTarget: 10,
+        maxRiskScore: 70,
+      },
+      signals: {
+        mode: 'operator',
+        feedUrl: '',
+      },
+      createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:00.000Z',
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/runs',
+      payload: { workspaceId: 'workspace_1' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(seenSchedulerOptions).toEqual([{ workspaceId: 'workspace_1' }]);
+  });
+
+  it('rejects manual run triggers for unknown workspaces', async () => {
+    const { app, seenSchedulerOptions } = await testServer();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/runs',
+      payload: { workspaceId: 'workspace_missing' },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ error: 'workspace not found' });
+    expect(seenSchedulerOptions).toEqual([]);
+  });
+
+  it('requires workspace id for manual run triggers', async () => {
+    const { app, seenSchedulerOptions } = await testServer();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/runs',
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'workspaceId required' });
+    expect(seenSchedulerOptions).toEqual([]);
+  });
+
+  it('requires wallet approval metadata before approving a run', async () => {
+    const { app } = await testServer();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/approve',
+      payload: { runId: 'run_missing' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'wallet approval required' });
+  });
+
+  it('rejects approvals from wallets that do not own the workspace', async () => {
+    const { app, audit, state } = await testServer();
+    const now = '2026-07-20T00:00:00.000Z';
+    await audit.saveWorkspace({
+      id: 'workspace_1',
+      name: 'RWA Income Treasury',
+      ownerAccount: 'owner-wallet',
+      vaultContractHash: 'contract-package-test',
+      network: 'casper-test',
+      policy: {
+        rwaTarget: 60,
+        stableTarget: 30,
+        nativeTarget: 10,
+        maxRiskScore: 70,
+      },
+      signals: {
+        mode: 'operator',
+        feedUrl: '',
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+    state.pendingRun = {
+      runId: 'run_approval',
+      workspaceId: 'workspace_1',
+      policy: samplePolicy,
+      recommendation: {
+        id: 'rec_approval',
+        runId: 'run_approval',
+        action: 'rebalance',
+        compliancePassed: true,
+        violations: [],
+        riskScore: 12,
+        explanation: 'rebalance',
+        confidence: 0.8,
+        agentProposed: false,
+        trace: [],
+        createdAt: now,
+      },
+      rebalance: {
+        id: 'rebalance_approval',
+        policyId: samplePolicy.id,
+        legs: [{ fromAssetId: 'tbill-rwa', toAssetId: 'usdc', amount: '100', weight: 0.01 }],
+        createdAt: now,
+      },
+      approvalToken: 'tok_run_approval',
+      snapshot: {
+        id: 'snap_approval',
+        capturedAt: now,
+        signals: [],
+      },
+      risk: {
+        score: 12,
+        band: 'low',
+        factors: [],
+        snapshotId: 'snap_approval',
+        computedAt: now,
+      },
+    };
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/approve',
+      payload: {
+        runId: 'run_approval',
+        workspaceId: 'workspace_1',
+        approval: {
+          accountHash: 'other-wallet',
+          publicKey: 'other-wallet',
+          signature: 'sig',
+          message: 'approval',
+          signedAt: now,
+        },
+      },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ error: 'wallet does not own this workspace' });
   });
 
   it('exports metrics for runs, risk, pending approval, and deploy timing', async () => {

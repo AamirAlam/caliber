@@ -16,6 +16,14 @@ export const TransactionRecordSchema = z.object({
   finalizedAt: z.string().datetime().optional(),
 });
 
+export const WalletApprovalSchema = z.object({
+  accountHash: z.string().min(1),
+  publicKey: z.string().min(1),
+  signature: z.string().min(1),
+  message: z.string().min(1),
+  signedAt: z.string().datetime(),
+});
+
 /** Lifecycle stages of a single agent loop. */
 export const AgentRunStageSchema = z.enum([
   'collect_signals',
@@ -35,6 +43,7 @@ export const AgentRunStageSchema = z.enum([
 export const AgentRunLogSchema = z.object({
   id: z.string().min(1),
   policyId: z.string().min(1),
+  workspaceId: z.string().min(1).optional(),
   stage: AgentRunStageSchema,
   status: z.enum(['running', 'completed', 'failed', 'rejected']),
   snapshotId: z.string().optional(),
@@ -47,6 +56,7 @@ export const AgentRunLogSchema = z.object({
   deployHash: z.string().optional(),
   /** Who approved execution, if a human did. */
   approvedBy: z.string().optional(),
+  approvalSignature: z.string().optional(),
   startedAt: z.string().datetime(),
   endedAt: z.string().datetime().optional(),
   notes: z.string().optional(),

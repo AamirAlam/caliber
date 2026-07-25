@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { AgentRunLog, TransactionRecord } from '@caliber/shared';
+import type { AgentRunLog, TreasuryPolicy, TreasuryWorkspace, TransactionRecord, WalletApproval } from '@caliber/shared';
 import { generateRecommendation } from './agent/runner.js';
 import { readVaultStateCached } from './casper/reader.js';
 import { formatMemory, summarizeHistory } from './memory.js';
@@ -23,6 +23,10 @@ export interface OrchestratorDeps {
   state: AppState;
 }
 
+export interface RunAgentLoopOptions {
+  workspaceId?: string;
+}
+
 export function defaultDeps(audit: AuditStore, state: AppState): OrchestratorDeps {
   return {
     audit,
@@ -38,13 +42,18 @@ export function defaultDeps(audit: AuditStore, state: AppState): OrchestratorDep
  * at `await_approval` (with a candidate stashed on AppState) and returns; phase 2
  * happens in `executeApproved`. Hold/halt runs complete immediately.
  */
-export async function runAgentLoop(deps: OrchestratorDeps, _seq: number): Promise<AgentRunLog> {
+export async function runAgentLoop(
+  deps: OrchestratorDeps,
+  _seq: number,
+  options: RunAgentLoopOptions = {},
+): Promise<AgentRunLog> {
   const { audit, state } = deps;
-  const policy = state.activePolicy;
+  const policy = await resolveRunPolicy(audit, state.activePolicy, options.workspaceId);
   const runId = `run_${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}_${randomUUID().slice(0, 8)}`;
   const run: AgentRunLog = {
     id: runId,
     policyId: policy.id,
+    workspaceId: options.workspaceId,
     stage: 'collect_signals',
     status: 'running',
     startedAt: new Date().toISOString(),
@@ -87,6 +96,8 @@ export async function runAgentLoop(deps: OrchestratorDeps, _seq: number): Promis
     if (recommendation.action === 'rebalance' && recommendation.rebalance) {
       state.pendingRun = {
         runId,
+        workspaceId: options.workspaceId,
+        policy,
         recommendation,
         rebalance: recommendation.rebalance,
         approvalToken: `tok_${runId}`,
@@ -102,7 +113,7 @@ export async function runAgentLoop(deps: OrchestratorDeps, _seq: number): Promis
         return run;
       }
       // Auto-approve path.
-      const { run: done } = await executeApproved(deps, runId, 'auto');
+      const { run: done } = await executeApproved(deps, runId, 'auto', options.workspaceId);
       return done;
     }
 
@@ -128,16 +139,22 @@ export async function executeApproved(
   deps: OrchestratorDeps,
   runId: string,
   approver: string,
+  workspaceId?: string,
+  approval?: WalletApproval,
 ): Promise<{ run: AgentRunLog; tx: TransactionRecord }> {
   const { audit, state } = deps;
   const pending = state.pendingRun ?? (await audit.getPendingApproval(runId));
   if (!pending || pending.runId !== runId) {
     throw new Error(`No run awaiting approval with id ${runId}`);
   }
+  if (workspaceId && pending.workspaceId && pending.workspaceId !== workspaceId) {
+    throw new Error(`Run ${runId} is not awaiting approval for workspace ${workspaceId}`);
+  }
 
   const run = (await audit.getRun(runId)) ?? {
     id: runId,
-    policyId: state.activePolicy.id,
+    policyId: pending.policy?.id ?? state.activePolicy.id,
+    workspaceId: pending.workspaceId ?? workspaceId,
     stage: 'await_approval' as const,
     status: 'running' as const,
     startedAt: new Date().toISOString(),
@@ -145,7 +162,7 @@ export async function executeApproved(
 
   // Server-side re-check: the deterministic gate, not the AI, authorizes execution.
   const violations = evaluatePolicy(
-    state.activePolicy,
+    pending.policy ?? state.activePolicy,
     pending.risk,
     pending.snapshot,
     pending.rebalance,
@@ -172,6 +189,7 @@ export async function executeApproved(
   run.transactionId = tx.id;
   run.deployHash = tx.deployHash;
   run.approvedBy = approver;
+  run.approvalSignature = approval?.signature;
   run.notes = tx.status === 'failed' ? tx.error : run.notes;
   run.endedAt = new Date().toISOString();
   await audit.saveRun(run);
@@ -186,6 +204,47 @@ export async function executeApproved(
   }
 
   return { run, tx };
+}
+
+async function resolveRunPolicy(
+  audit: AuditStore,
+  defaultPolicy: TreasuryPolicy,
+  workspaceId?: string,
+): Promise<TreasuryPolicy> {
+  if (!workspaceId) return defaultPolicy;
+  const workspace = await audit.getWorkspace(workspaceId);
+  if (!workspace) throw new Error(`Workspace ${workspaceId} not found`);
+  return policyFromWorkspace(workspace, defaultPolicy);
+}
+
+function policyFromWorkspace(workspace: TreasuryWorkspace, base: TreasuryPolicy): TreasuryPolicy {
+  const pct = {
+    rwa: workspace.policy.rwaTarget / 100,
+    stablecoin: workspace.policy.stableTarget / 100,
+    native: workspace.policy.nativeTarget / 100,
+  };
+  const band = 0.1;
+  return {
+    ...base,
+    id: `policy_${workspace.id}`,
+    name: workspace.name,
+    owner: workspace.ownerAccount || base.owner,
+    updatedAt: workspace.updatedAt,
+    allocations: base.allocations.map((allocation) => {
+      const target = pct[allocation.assetClass as keyof typeof pct] ?? allocation.target;
+      return {
+        ...allocation,
+        target,
+        min: Math.max(0, target - band),
+        max: Math.min(1, target + band),
+      };
+    }),
+    constraints: {
+      ...base.constraints,
+      minLiquidityBufferPct: pct.stablecoin,
+      maxRiskScore: workspace.policy.maxRiskScore,
+    },
+  };
 }
 
 async function finalizeInBackground(deps: OrchestratorDeps, tx: TransactionRecord): Promise<void> {

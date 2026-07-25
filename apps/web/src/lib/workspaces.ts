@@ -5,17 +5,19 @@ export type { TreasuryWorkspace } from '@caliber/shared';
 const STORAGE_KEY = 'caliber.workspaces.v1';
 const ACTIVE_KEY = 'caliber.activeWorkspaceId.v1';
 
-export function workspaceSlug(name: string): string {
-  const base = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 40);
-  return `${base || 'treasury'}-${Date.now().toString(36)}`;
-}
-
 export function activateWorkspace(workspace: TreasuryWorkspace): void {
   saveWorkspace(workspace);
+}
+
+export function saveWorkspaces(nextWorkspaces: TreasuryWorkspace[]): void {
+  if (typeof window === 'undefined') return;
+  const existing = listWorkspaces();
+  const byId = new Map<string, TreasuryWorkspace>();
+  for (const workspace of [...existing, ...nextWorkspaces]) {
+    byId.set(workspace.id, workspace);
+  }
+  const merged = [...byId.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
 }
 
 export function saveWorkspace(workspace: TreasuryWorkspace): void {
@@ -43,5 +45,6 @@ export function getWorkspace(id: string | null): TreasuryWorkspace | null {
 export function getActiveWorkspace(): TreasuryWorkspace | null {
   if (typeof window === 'undefined') return null;
   const activeId = localStorage.getItem(ACTIVE_KEY);
-  return listWorkspaces().find((workspace) => workspace.id === activeId) ?? null;
+  const workspaces = listWorkspaces();
+  return workspaces.find((workspace) => workspace.id === activeId) ?? workspaces[0] ?? null;
 }

@@ -12,6 +12,7 @@ import type {
   AgentReviewSchema,
   TraceStepSchema,
   TransactionRecordSchema,
+  WalletApprovalSchema,
   AgentRunStageSchema,
   AgentRunLogSchema,
   TreasuryWorkspaceSchema,
@@ -33,6 +34,7 @@ export type AgentReview = z.infer<typeof AgentReviewSchema>;
 export type TraceStep = z.infer<typeof TraceStepSchema>;
 
 export type TransactionRecord = z.infer<typeof TransactionRecordSchema>;
+export type WalletApproval = z.infer<typeof WalletApprovalSchema>;
 export type AgentRunStage = z.infer<typeof AgentRunStageSchema>;
 export type AgentRunLog = z.infer<typeof AgentRunLogSchema>;
 
