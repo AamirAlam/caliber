@@ -30,6 +30,7 @@ Caliber is deployed and producing real transactions on `casper-test`.
 | **Contract hash** | [`bdac504f…0dbb4ff5`](https://testnet.cspr.live/contract/bdac504ff9f57316de41be341459cfea603589cd10e302db89e61b0b0dbb4ff5) |
 | **Transaction-producing entry point** | `record_rebalance` |
 | **On-chain rebalances recorded** | read live from the contract's `rebalance_count` |
+| **Self-managed signal feed** | [`/signals/feed`](https://caliber-production-d4ee.up.railway.app/signals/feed) |
 | **Explorer** | [testnet.cspr.live](https://testnet.cspr.live/contract-package/5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0) |
 
 > Full package hash: `contract-package-5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0`
@@ -46,6 +47,9 @@ straight from global state — no off-chain bookkeeping.
 - **Deterministic guardrails are the only gate on execution.** Allocation bands,
   liquidity floors, risk ceilings, and single-rebalance caps are enforced in code —
   the LLM can never loosen them, only propose within them.
+- **Workspace-scoped control.** A treasury owner creates a workspace, connects a
+  wallet session, reviews policy/feed status, then starts an agent analysis. The
+  dashboard does not surface actions until that workspace has a real agent decision.
 - **Human-in-the-loop + on-chain audit.** Nothing settles without approval, and every
   run's signals, decision, rationale, review, and deploy hash are recorded.
 - **Model-agnostic.** The agent runs on the Vercel AI SDK; swap the LLM via config
@@ -70,7 +74,7 @@ explanatory and never overrides the rules. See [`docs/architecture.md`](docs/arc
 
 | Path | What |
 |---|---|
-| `apps/web` | Next.js frontend — landing page + live dashboard (risk gauge, agent deliberation, paginated run history) |
+| `apps/web` | Next.js frontend — onboarding, wallet-session access, workspace dashboard, feed status, and paginated run history |
 | `apps/services` | Off-chain agent orchestrator — signals → risk → **proposer/reviewer agents** → policy gate → execution → audit, exposed over a Fastify API |
 | `packages/contracts` | Casper treasury-vault contract (**Odra**) — the on-chain anchor |
 | `packages/shared` | Zod schemas + TypeScript domain types (one source of truth) |
@@ -125,7 +129,7 @@ The safest production setup is:
   - Deploy the Fastify service with the repo-root `railway.toml` or `apps/services/railway.toml`.
   - Set `CALIBER_DATABASE_URL` or Railway `DATABASE_URL` for Postgres.
   - Review `apps/services/config/testnet-policy.json`; deployed modes load this policy directly.
-  - Leave `CALIBER_SIGNAL_FEED_URL` empty to use the built-in operator testnet feed at `/signals/feed`, or set it to an external live feed that returns `Signal[]` or `{ "signals": Signal[] }`.
+  - Leave `CALIBER_SIGNAL_FEED_URL` empty to use the self-managed testnet feed at `/signals/feed`. The current deployed feed is `https://caliber-production-d4ee.up.railway.app/signals/feed`.
   - Set `CALIBER_ADMIN_TOKEN`; Vercel uses it server-side for `POST /runs` and `POST /approve`.
   - Set `PORT` via Railway defaults; the service already binds `0.0.0.0:$PORT`.
   - Set `CALIBER_DRY_RUN=false` and mount a real funded PEM file because `CASPER_SECRET_KEY_PATH` is read from the filesystem.
@@ -135,20 +139,19 @@ The safest production setup is:
   - Set the project root to `apps/web`.
   - Set `SERVICES_URL=https://<your-railway-service>.up.railway.app`.
   - Set the same `CALIBER_ADMIN_TOKEN` so the proxy can authenticate mutations server-to-server.
-  - Set `WALLET_SESSION_SECRET`; treasury owners connect and sign with their wallet before run/approve controls are available.
+  - Set `WALLET_SESSION_SECRET`; treasury owners connect a wallet session before run controls are available. Approval signing is still required for on-chain rebalance settlement.
   - If `SERVICES_URL` is missing, the Next.js proxy falls back to `http://localhost:4000`, which makes production requests fail with `502`.
   - `NEXT_PUBLIC_SERVICES_URL` is optional now; the frontend uses a Next.js proxy at `/api/caliber`.
 
 This avoids browser-to-Railway CORS entirely. Vercel calls Railway server-to-server, and the browser only talks to Vercel.
 
-## Testnet flow
+## Product flow
 
-1. Dashboard shows the policy, live signals, a risk gauge, and the latest decision.
-2. **Run agent cycle** → the service pulls the configured live signal feed.
-3. The agents deliberate: the Proposer designs a compliant de-risking rebalance; the
-   Risk-Reviewer approves it.
-4. **Approve & settle on Casper** → a real `record_rebalance` deploy is submitted; the
-   deploy hash links to the explorer and the on-chain rebalance count ticks up.
+1. Create a treasury workspace with a vault package hash, policy preset/custom guardrails, and the self-managed feed.
+2. Connect the treasury owner wallet to create a wallet session for dashboard controls.
+3. Open the dashboard to review funds under management, current policy, feed status/freshness, and whether this workspace has been analyzed.
+4. **Run analysis** → the backend agent collects live signals, scores risk, evaluates the workspace policy, and records a decision trace.
+5. If the agent recommends a policy-compliant rebalance, the action pane asks the owner to approve and settle on Casper. No action is shown before an agent decision exists.
 
 ## Casper AI toolkit usage
 

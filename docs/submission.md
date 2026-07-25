@@ -1,93 +1,176 @@
-# Caliber — AI treasury control plane for tokenized RWAs, on Casper
+# Caliber Submission Guide
 
-Caliber runs a treasury the way a disciplined desk would: it watches the signals,
-reasons about risk inside a fixed mandate, and only acts on moves that clear hard
-guardrails. Every approved move settles on Casper, and the on-chain record is the
-source of truth.
+Caliber is a policy-driven AI treasury control plane for tokenized real-world
+assets on Casper. It lets a treasury owner create a workspace, define guardrails,
+run an agent analysis against live signals, and approve only the actions that pass
+deterministic policy checks.
 
-It's not a yield bot. A treasury here is a mandate with constraints — allocation
-bands, a liquidity floor, a risk ceiling, a single-rebalance cap. The AI proposes
-within those limits; deterministic code decides what's allowed to execute.
+The product is intentionally not a yield bot. It behaves like an operating desk:
+policy comes first, analysis happens on demand, and no on-chain action is shown
+until the agent has produced a decision for that specific workspace.
 
-## How it works
+## Quick Links
 
-One loop, per cycle:
+| Item | Link / value |
+|---|---|
+| Casper network | `casper-test` |
+| Contract package | `contract-package-5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0` |
+| Package explorer | https://testnet.cspr.live/contract-package/5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0 |
+| Contract hash | `contract-bdac504ff9f57316de41be341459cfea603589cd10e302db89e61b0b0dbb4ff5` |
+| Contract explorer | https://testnet.cspr.live/contract/bdac504ff9f57316de41be341459cfea603589cd10e302db89e61b0b0dbb4ff5 |
+| Self-managed feed | https://caliber-production-d4ee.up.railway.app/signals/feed |
 
+## Product Walkthrough
+
+Start at `/onboarding`.
+
+1. Create a treasury workspace.
+2. Connect the deployed `CaliberVault` package hash.
+3. Choose a policy preset or customize allocation/risk guardrails.
+4. Use the self-managed Caliber signal feed. External feeds are shown as coming soon.
+5. Connect the treasury owner wallet to create the dashboard session.
+6. Activate the workspace and open the dashboard.
+
+The dashboard starts in an idle state for a new workspace. It shows funds under
+management, policy guardrails, feed health, vault activity, and whether an agent
+analysis has run. The action pane stays empty until **Run analysis** completes.
+
+After an analysis run, the dashboard shows the latest workspace-specific
+decision: hold, rebalance, or halt. If the agent recommends a policy-compliant
+rebalance, the treasury owner can approve and settle it on Casper.
+
+## Decision Flow
+
+One analysis cycle:
+
+```text
+collect signals
+  -> score risk
+  -> Proposer agent designs an action
+  -> deterministic policy gate checks hard constraints
+  -> Risk-Reviewer agent approves or vetoes
+  -> decision is recorded
+  -> optional owner approval
+  -> record_rebalance deploy on Casper
 ```
-collect signals → score risk → Proposer designs a move
-  → deterministic policy gate (the hard gate)
-  → Risk Officer reviews (approve / veto)
-  → human approval
-  → settle on Casper (record_rebalance)
-  → persist the full run + read on-chain state back
+
+The Proposer can reason and explain, but it cannot authorize execution. The
+deterministic policy engine is the hard gate. It enforces allocation bands,
+liquidity floor, risk ceiling, approved assets, and the single-rebalance cap.
+
+The Risk-Reviewer is adversarial. It can approve a compliant proposal or veto it.
+If the reviewer or gate rejects the first proposal, the concern goes back to the
+Proposer for one revision before the cycle settles on a final decision.
+
+## Wallet Behavior
+
+Wallet connection creates the web session used to access run controls. This is
+connection-only for the submitted product because the Casper wallet extension was
+not reliably surfacing message signing after connection in the browser flow.
+
+On-chain settlement still requires wallet approval. The signature prompt is
+reserved for the high-impact action: approving a rebalance that will be submitted
+to Casper.
+
+## What Is On-Chain
+
+`CaliberVault` is the on-chain audit anchor. The transaction-producing entry
+point is:
+
+```text
+record_rebalance
 ```
 
-Two agents actually deliberate. The **Proposer** designs the rebalance — which
-asset to trim, how much — and tests it against the policy tools. The **Risk
-Officer** is a separate, adversarial reviewer that signs off or vetoes. If it
-vetoes (or the gate rejects the move), the concern goes back to the Proposer for
-one revision, then re-review. It only halts if the second attempt still fails.
-That's real self-correction, not an LLM narrating a rules engine.
+When a rebalance is approved, the services backend builds and submits a real
+Casper deploy. The contract records the rebalance id, increments
+`rebalance_count`, and emits an audit event. The dashboard reads live contract
+state (`paused`, `rebalance_count`) back from Casper RPC.
 
-The guardrails are the only thing that can authorize execution. The LLM can
-propose and explain; it can never loosen a constraint. Nothing hits the chain
-without human approval, and every run stores its full reasoning trace (proposer
-turns, tools used, gate verdict, review verdict, revisions, final decision).
+## What Is Off-Chain
 
-## What's actually on-chain
+The services backend runs the agent loop and API:
 
-`CaliberVault` (Odra/Rust) is deployed and live on Casper testnet.
-`record_rebalance` is the transaction-producing entry point — it anchors each
-approved decision and emits an audit event. Caliber also *reads* live contract
-state (`rebalance_count`, `paused`) straight from global state, so the dashboard's
-numbers come from the chain, not off-chain bookkeeping.
+- collects signal snapshots from the self-managed feed
+- scores treasury risk
+- runs proposer/reviewer deliberation
+- applies deterministic policy checks
+- persists workspace-scoped run history
+- prepares approval-gated Casper execution
 
-- **Contract package:** `contract-package-5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0`
-- **Explorer:** https://testnet.cspr.live/contract-package/5dd0bfde53bf885dc64b7009d4c02030aced4c8525ff7a1f3c0735d238142ce0
+The web app provides onboarding, wallet-session access, dashboard monitoring,
+feed status/freshness, action approval, and run-history views.
 
-## Stack
+## Self-Managed Feed
 
-- **Contracts:** Odra (Rust), deployed via Odra livenet; owner-gated, emits `RebalanceRecorded` / `PausedSet`.
-- **Agent:** Vercel AI SDK — model-agnostic (Claude by default, swap via env). Two-agent loop with a deterministic policy engine as the gate. Casper MCP server plugs in for on-chain reads; casper-js-sdk is the fallback + the signing/submit path.
-- **API + web:** Fastify service exposing the loop; Next.js + Tailwind dashboard (risk gauge, live agent deliberation, decision memory, paginated run history with full reasoning traces).
-- **Persistence:** SQLite for local dev, Postgres for production (Kysely, one code path). The durable record for rebalances is on-chain; the DB holds the richer off-chain history.
-- **Monorepo:** pnpm + Turborepo, TypeScript throughout.
+The submitted product uses a backend-managed feed:
+
+```text
+https://caliber-production-d4ee.up.railway.app/signals/feed
+```
+
+The feed returns `Signal[]` or `{ "signals": Signal[] }` with observations such
+as treasury liquidity, RWA redemption queue, and short-term Treasury yield. The
+dashboard checks the feed directly through a server-side status route and shows
+freshness before an agent run exists.
 
 ## Casper AI Toolkit Usage
 
-Implemented in the submitted product:
+- **Odra:** `CaliberVault` is implemented as an Odra contract and deployed on
+  Casper testnet.
+- **casper-js-sdk:** the services execution layer signs/submits
+  `record_rebalance` deploys and reads Casper RPC state.
+- **Casper MCP Server:** optional tool provider through `CALIBER_CASPER_MCP_URL`.
+  Caliber also exposes a built-in `casper_get_vault_state` tool backed by Casper
+  RPC so the agent can inspect live vault state.
 
-- **Odra:** `CaliberVault` is the transaction-producing on-chain component. It
-  records approved rebalances, enforces owner-only writes, supports pause/resume,
-  and emits audit events on Casper testnet.
-- **casper-js-sdk:** the execution layer constructs, signs, and submits
-  `record_rebalance` deploys, then reads transaction and contract state back from
-  Casper RPC.
-- **Casper MCP Server:** when `CALIBER_CASPER_MCP_URL` is configured, MCP tools
-  are injected into the Proposer agent. Caliber also provides a built-in
-  `casper_get_vault_state` tool backed by live Casper RPC, so the agent always
-  has a concrete Casper state-reading tool. For operator runs,
-  `CALIBER_CASPER_MCP_REQUIRED=true` makes startup/agent execution fail unless
-  the external Casper MCP server is connected. The recommendation trace records
-  MCP as connected, disabled, or unavailable.
+Roadmap integrations:
 
-Launch roadmap integrations:
+- **CSPR.cloud:** hosted chain-data and signal infrastructure.
+- **x402:** paid/verifiable premium signal feeds.
+- **CSPR.click:** wallet-based approval and account access surface.
 
-- **CSPR.cloud:** hosted chain-data and signal infrastructure for production
-  deployments.
-- **x402:** pay-per-request access to premium RWA and market signal feeds.
-- **CSPR.click:** wallet-based human approval and account-based treasury access.
-
-## Run it
+## Run Locally
 
 ```bash
 pnpm install
-bash scripts/setup.sh     # seeds .env files
-pnpm dev                  # web :3000 + agent API :4000
+bash scripts/setup.sh
+pnpm dev
 ```
 
-Open `/dashboard`, hit **Run agent cycle** → the service pulls the configured
-live signal feed → the two agents deliberate → **Approve** → a real
-`record_rebalance` deploy lands on testnet, linked to the explorer. Set
-`ANTHROPIC_API_KEY` for the live agents; without a key it falls back to the
-deterministic decision path while still using live configured signals.
+Open:
+
+- `/onboarding` to create a workspace
+- `/dashboard` to monitor the workspace and run analysis
+- `/dashboard/runs` to inspect historical runs and reasoning traces
+
+Useful commands:
+
+```bash
+pnpm --filter @caliber/web typecheck
+pnpm --filter @caliber/web build
+pnpm --filter @caliber/services test
+pnpm --filter @caliber/shared test
+```
+
+Set `ANTHROPIC_API_KEY` for live LLM agents. Without it, Caliber uses the
+deterministic fallback path while still collecting configured live signals.
+
+## Suggested Demo Path
+
+1. Open onboarding and create a workspace using the self-managed feed.
+2. Connect the treasury owner wallet session.
+3. Open the dashboard and point out that no action is recommended yet.
+4. Run analysis.
+5. Open the reasoning trace to show proposer/reviewer/gate activity.
+6. If a rebalance is recommended, approve and settle it on Casper.
+7. Open the explorer link and confirm the on-chain deploy.
+
+## Repository Map
+
+| Path | Purpose |
+|---|---|
+| `apps/web` | Next.js onboarding, dashboard, wallet session, run history |
+| `apps/services` | Fastify API, agent loop, policy engine, execution, audit |
+| `packages/contracts` | Odra `CaliberVault` contract |
+| `packages/shared` | Shared Zod schemas and TypeScript domain types |
+| `docs` | Architecture and deployment documentation |
