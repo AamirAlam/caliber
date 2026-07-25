@@ -30,6 +30,7 @@ const PROPOSER_SYSTEM = `You are the ${AGENT_ROLES.proposer.name}, the ${AGENT_R
 treasury team for tokenized real-world assets. You work alongside the ${AGENT_ROLES.reviewer.name}, who independently
 reviews any move you propose. You decide what to do THIS cycle: hold, rebalance, or halt. Work the tools:
 1. read the signals, policy, and current risk;
+1a. read live Casper vault state with casper_get_vault_state before committing;
 2. reason about whether the treasury is within its mandate;
 3. if a move is warranted, DESIGN the rebalance yourself — you own the design. Choose which over-weight asset(s) to trim,
    size each leg, and split across one or two legs if that is cleaner. suggest_rebalance is only a reference baseline;
@@ -106,8 +107,8 @@ export async function generateRecommendation(
         mcp.status === 'connected'
           ? `Casper MCP connected (${mcp.toolNames.length} tools): ${mcp.toolNames.join(', ')}`
           : mcp.status === 'disabled'
-            ? 'Casper MCP disabled; using direct Casper RPC and casper-js-sdk fallback.'
-            : 'Casper MCP unavailable; using direct Casper RPC and casper-js-sdk fallback.',
+            ? 'External Casper MCP disabled; using built-in Casper toolkit RPC tool and casper-js-sdk fallback.'
+            : 'External Casper MCP unavailable; using built-in Casper toolkit RPC tool and casper-js-sdk fallback.',
       ok: mcp.status === 'connected' ? true : undefined,
     });
     result.recommendation.trace = trace.map((s, step) => ({ ...s, step }));
@@ -294,7 +295,7 @@ async function runProposer(
     system: PROPOSER_SYSTEM,
     tools,
     maxSteps: 10,
-    prompt: `${history}Decide this cycle for the "${policy.name}" treasury. Risk is ${risk.band} (${risk.score}/100). Investigate with the tools, design a compliant move if warranted, then commit_decision.${revision}`,
+    prompt: `${history}Decide this cycle for the "${policy.name}" treasury. Risk is ${risk.band} (${risk.score}/100). Investigate with the tools, including casper_get_vault_state for live Casper state, design a compliant move if warranted, then commit_decision.${revision}`,
   });
 
   const trace = (out.steps ?? []).flatMap((s) => (s.toolCalls ?? []).map((c) => c.toolName));

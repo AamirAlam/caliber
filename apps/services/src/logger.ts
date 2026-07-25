@@ -4,7 +4,6 @@ type Level = 'debug' | 'info' | 'warn' | 'error';
 
 function emit(level: Level, msg: string, meta?: Record<string, unknown>): void {
   const line = { level, msg, ...meta };
-  // eslint-disable-next-line no-console
   console.log(JSON.stringify(line));
 }
 

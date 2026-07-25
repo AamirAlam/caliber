@@ -64,9 +64,12 @@ Implemented in the submitted prototype:
   `record_rebalance` deploys, then reads transaction and contract state back from
   Casper RPC.
 - **Casper MCP Server:** when `CALIBER_CASPER_MCP_URL` is configured, MCP tools
-  are injected into the Proposer agent. The recommendation trace records MCP as
-  connected, disabled, or unavailable, so the demo can show whether the agent
-  used Casper AI Toolkit tools or SDK/RPC fallback.
+  are injected into the Proposer agent. Caliber also provides a built-in
+  `casper_get_vault_state` tool backed by live Casper RPC, so the agent always
+  has a concrete Casper state-reading tool. For final demos,
+  `CALIBER_CASPER_MCP_REQUIRED=true` makes startup/agent execution fail unless
+  the external Casper MCP server is connected. The recommendation trace records
+  MCP as connected, disabled, or unavailable.
 
 Launch roadmap integrations:
 

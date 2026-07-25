@@ -5,7 +5,7 @@ import type {
   TransactionRecord,
 } from '@caliber/shared';
 import type { DB } from '../db.js';
-import type { AuditStore } from './index.js';
+import type { AuditStore, PendingApproval } from './index.js';
 
 /**
  * SQL-backed audit store over Kysely — works identically against SQLite (dev)
@@ -32,6 +32,17 @@ export class SqlAuditStore implements AuditStore {
       .onConflict((oc) => oc.column('id').doUpdateSet({ started_at: run.startedAt, data }))
       .execute();
   }
+  async savePendingApproval(pending: PendingApproval): Promise<void> {
+    const data = JSON.stringify(pending);
+    await this.db
+      .insertInto('pending_approvals')
+      .values({ run_id: pending.runId, created_at: pending.createdAt, data })
+      .onConflict((oc) => oc.column('run_id').doUpdateSet({ created_at: pending.createdAt, data }))
+      .execute();
+  }
+  async deletePendingApproval(runId: string): Promise<void> {
+    await this.db.deleteFrom('pending_approvals').where('run_id', '=', runId).execute();
+  }
 
   async listRuns(): Promise<AgentRunLog[]> {
     const rows = await this.db
@@ -44,11 +55,22 @@ export class SqlAuditStore implements AuditStore {
   async getRun(id: string): Promise<AgentRunLog | undefined> {
     return this.getById('runs', id);
   }
+  async getSnapshot(id: string): Promise<SignalSnapshot | undefined> {
+    return this.getById('snapshots', id);
+  }
   async getRecommendation(id: string): Promise<Recommendation | undefined> {
     return this.getById('recommendations', id);
   }
   async getTransaction(id: string): Promise<TransactionRecord | undefined> {
     return this.getById('transactions', id);
+  }
+  async getPendingApproval(runId: string): Promise<PendingApproval | undefined> {
+    const row = await this.db
+      .selectFrom('pending_approvals')
+      .select('data')
+      .where('run_id', '=', runId)
+      .executeTakeFirst();
+    return row ? (JSON.parse(row.data) as PendingApproval) : undefined;
   }
 
   private async upsert(
@@ -65,7 +87,7 @@ export class SqlAuditStore implements AuditStore {
   }
 
   private async getById<T>(
-    table: 'runs' | 'recommendations' | 'transactions',
+    table: 'runs' | 'snapshots' | 'recommendations' | 'transactions',
     id: string,
   ): Promise<T | undefined> {
     const row = await this.db

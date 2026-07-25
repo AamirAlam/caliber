@@ -1,10 +1,12 @@
 import type {
   AgentRunLog,
+  RebalanceRequest,
   Recommendation,
+  RiskScore,
   SignalSnapshot,
   TransactionRecord,
 } from '@caliber/shared';
-import { config } from '../config.js';
+import { config, isProductionLike } from '../config.js';
 import { createKysely, migrate } from '../db.js';
 import { log } from '../logger.js';
 import { SqlAuditStore } from './sql.js';
@@ -19,10 +21,24 @@ export interface AuditStore {
   saveRecommendation(rec: Recommendation): Promise<void>;
   saveTransaction(tx: TransactionRecord): Promise<void>;
   saveRun(run: AgentRunLog): Promise<void>;
+  savePendingApproval(pending: PendingApproval): Promise<void>;
+  deletePendingApproval(runId: string): Promise<void>;
   listRuns(): Promise<AgentRunLog[]>;
   getRun(id: string): Promise<AgentRunLog | undefined>;
+  getSnapshot(id: string): Promise<SignalSnapshot | undefined>;
   getRecommendation(id: string): Promise<Recommendation | undefined>;
   getTransaction(id: string): Promise<TransactionRecord | undefined>;
+  getPendingApproval(runId: string): Promise<PendingApproval | undefined>;
+}
+
+export interface PendingApproval {
+  runId: string;
+  recommendation: Recommendation;
+  rebalance: RebalanceRequest;
+  approvalToken: string;
+  snapshot: SignalSnapshot;
+  risk: RiskScore;
+  createdAt: string;
 }
 
 /** In-memory implementation. Keyed by id; `listRuns` returns newest-first. */
@@ -31,6 +47,7 @@ export class InMemoryAuditStore implements AuditStore {
   private recommendations = new Map<string, Recommendation>();
   private transactions = new Map<string, TransactionRecord>();
   private runs = new Map<string, AgentRunLog>();
+  private pending = new Map<string, PendingApproval>();
 
   async saveSnapshot(snapshot: SignalSnapshot): Promise<void> {
     this.snapshots.set(snapshot.id, snapshot);
@@ -44,17 +61,29 @@ export class InMemoryAuditStore implements AuditStore {
   async saveRun(run: AgentRunLog): Promise<void> {
     this.runs.set(run.id, { ...run });
   }
+  async savePendingApproval(pending: PendingApproval): Promise<void> {
+    this.pending.set(pending.runId, { ...pending });
+  }
+  async deletePendingApproval(runId: string): Promise<void> {
+    this.pending.delete(runId);
+  }
   async listRuns(): Promise<AgentRunLog[]> {
     return [...this.runs.values()].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   }
   async getRun(id: string): Promise<AgentRunLog | undefined> {
     return this.runs.get(id);
   }
+  async getSnapshot(id: string): Promise<SignalSnapshot | undefined> {
+    return this.snapshots.get(id);
+  }
   async getRecommendation(id: string): Promise<Recommendation | undefined> {
     return this.recommendations.get(id);
   }
   async getTransaction(id: string): Promise<TransactionRecord | undefined> {
     return this.transactions.get(id);
+  }
+  async getPendingApproval(runId: string): Promise<PendingApproval | undefined> {
+    return this.pending.get(runId);
   }
 }
 
@@ -77,6 +106,7 @@ export async function createAuditStore(): Promise<AuditStore> {
     log.info('audit store: sql', { backend: config.db.kind, target });
     return new SqlAuditStore(db);
   } catch (err) {
+    if (isProductionLike()) throw err;
     log.error('audit store: database unavailable — falling back to in-memory (data will NOT persist)', {
       backend: config.db.kind,
       err: String(err),

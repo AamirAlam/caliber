@@ -63,15 +63,19 @@ export class CasperExecutor {
    * Wait for a submitted transaction to finalize. Returns the updated status.
    * Used by the finalization poller (M5).
    */
-  async waitForFinalization(hash: string): Promise<'finalized' | 'failed'> {
+  async waitForFinalization(hash: string): Promise<'pending' | 'finalized' | 'failed'> {
     if (config.loop.dryRun) return 'finalized';
     try {
       const rpc = new casper.RpcClient(new casper.HttpHandler(config.casper.rpcUrl));
       const res = await rpc.getTransactionByTransactionHash(hash);
       const errorMessage = res.executionInfo?.executionResult?.errorMessage;
+      if (!res.executionInfo?.executionResult) return 'pending';
       return errorMessage ? 'failed' : 'finalized';
-    } catch {
-      return 'failed';
+    } catch (err) {
+      const msg = String(err);
+      if (/not found|No such|404|missing/i.test(msg)) return 'pending';
+      log.warn('finalization lookup failed', { hash, err: msg });
+      return 'pending';
     }
   }
 }

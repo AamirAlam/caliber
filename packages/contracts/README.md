@@ -18,7 +18,8 @@ decision on Casper testnet.
 | `record_rebalance(rebalance_id)` | **Anchor an approved rebalance**; emits `RebalanceRecorded` |
 | `is_paused()` / `rebalance_count()` | Read-only views |
 
-Bodies are scaffolding with `TODO`s — the storage and event wiring is left to fill in.
+Storage, owner checks, pause handling, counters, and audit events are implemented
+and covered by the contract tests.
 
 ## Toolchain
 

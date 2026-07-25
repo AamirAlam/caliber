@@ -1,21 +1,44 @@
 import { describe, expect, it } from 'vitest';
-import { collectSignals, SimulatedSignalSource } from './signals/index.js';
+import type { Signal } from '@caliber/shared';
+import { collectSignals, validateSignalSet, type SignalSource } from './signals/index.js';
 import { evaluatePolicy, scoreRisk } from './policy/index.js';
 import { buildRebalanceFromLegs, decideAction } from './decision/index.js';
 import { samplePolicy } from './samplePolicy.js';
-import { AppState } from './state.js';
 
 async function snapshotFor(stress: boolean) {
-  const state = new AppState(samplePolicy);
-  state.scenarioStress = stress;
-  return collectSignals([new SimulatedSignalSource(state)], 'snap_test');
+  return collectSignals([fixtureSource(stress)], 'snap_test');
+}
+
+function fixtureSource(stress: boolean): SignalSource {
+  const mk = (key: string, label: string, value: number, unit: Signal['unit'], confidence = 1): Signal => ({
+    key,
+    label,
+    value,
+    unit,
+    source: 'test-fixture',
+    confidence,
+    observedAt: new Date().toISOString(),
+  });
+  return {
+    name: 'test-fixture',
+    async collect() {
+      return [
+        mk('tbill.yield.3m', '3M T-Bill yield', stress ? 4.5 : 5.1, 'pct', 0.95),
+        mk('vault.liquidity.usd', 'Vault stablecoin liquidity', stress ? 180_000 : 420_000, 'usd'),
+        mk('rwa.redemption.queue', 'RWA redemption queue depth', stress ? 40 : 3, 'count', 0.8),
+      ];
+    },
+  };
 }
 
 describe('signals + risk', () => {
-  it('is deterministic for a given scenario flag and tick', async () => {
-    const a = await snapshotFor(true);
-    const b = await snapshotFor(true);
-    expect(a.signals).toEqual(b.signals);
+  it('collects all required live signal keys', async () => {
+    const snapshot = await snapshotFor(true);
+    expect(snapshot.signals.map((s) => s.key).sort()).toEqual([
+      'rwa.redemption.queue',
+      'tbill.yield.3m',
+      'vault.liquidity.usd',
+    ]);
   });
 
   it('scores calm low and stress high', async () => {
@@ -23,6 +46,42 @@ describe('signals + risk', () => {
     const stress = scoreRisk(await snapshotFor(true));
     expect(calm.score).toBeLessThan(samplePolicy.constraints.maxRiskScore);
     expect(stress.score).toBeGreaterThan(samplePolicy.constraints.maxRiskScore);
+  });
+
+  it('rejects incomplete signal sets', async () => {
+    await expect(
+      collectSignals(
+        [
+          {
+            name: 'incomplete',
+            async collect() {
+              return [
+                {
+                  key: 'vault.liquidity.usd',
+                  label: 'Vault stablecoin liquidity',
+                  value: 180_000,
+                  unit: 'usd',
+                  source: 'incomplete',
+                  confidence: 1,
+                  observedAt: new Date().toISOString(),
+                },
+              ];
+            },
+          },
+        ],
+        'snap_incomplete',
+      ),
+    ).rejects.toThrow(/missing required keys/);
+  });
+
+  it('rejects stale signal observations', () => {
+    const observedAt = '2026-07-03T01:00:00.000Z';
+    const signals: Signal[] = [
+      { key: 'tbill.yield.3m', label: '3M T-Bill yield', value: 4.5, unit: 'pct', source: 'test', confidence: 1, observedAt },
+      { key: 'vault.liquidity.usd', label: 'Vault stablecoin liquidity', value: 180_000, unit: 'usd', source: 'test', confidence: 1, observedAt },
+      { key: 'rwa.redemption.queue', label: 'RWA redemption queue depth', value: 40, unit: 'count', source: 'test', confidence: 1, observedAt },
+    ];
+    expect(() => validateSignalSet(signals, Date.parse('2026-07-03T01:10:01.000Z'), 300000)).toThrow(/stale/);
   });
 });
 

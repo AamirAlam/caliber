@@ -4,7 +4,7 @@
 
 [build]
 builder = "RAILPACK"
-buildCommand = "corepack enable && pnpm install --frozen-lockfile"
+buildCommand = "corepack enable && pnpm install --frozen-lockfile && pnpm --filter @caliber/services build"
 
 [deploy]
 startCommand = "pnpm --filter @caliber/services start"

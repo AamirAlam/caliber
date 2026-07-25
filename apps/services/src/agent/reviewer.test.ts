@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentReview } from '@caliber/shared';
+import type { AgentReview, Signal } from '@caliber/shared';
 import { aggregatePanel, reviewContext, type ReviewInput } from './reviewer.js';
 import { samplePolicy } from '../samplePolicy.js';
 import { buildRebalanceFromLegs } from '../decision/index.js';
-import { collectSignals, SimulatedSignalSource } from '../signals/index.js';
+import { collectSignals, type SignalSource } from '../signals/index.js';
 import { scoreRisk } from '../policy/index.js';
-import { AppState } from '../state.js';
 
 const approve = (): AgentReview => ({ approved: true, concern: 'ok', severity: 'low' });
 const veto = (severity: AgentReview['severity'] = 'high'): AgentReview => ({
@@ -37,9 +36,7 @@ describe('aggregatePanel — majority veto', () => {
 
 describe('reviewContext — grounded facts', () => {
   it('reports the buffer delta and the deterministic verdict', async () => {
-    const state = new AppState(samplePolicy);
-    state.scenarioStress = true;
-    const snapshot = await collectSignals([new SimulatedSignalSource(state)], 'snap');
+    const snapshot = await collectSignals([fixtureSource()], 'snap');
     const input: ReviewInput = {
       policy: samplePolicy,
       risk: scoreRisk(snapshot),
@@ -55,3 +52,25 @@ describe('reviewContext — grounded facts', () => {
     expect(ctx).toContain('PASSES all constraints');
   });
 });
+
+function fixtureSource(): SignalSource {
+  const mk = (key: string, label: string, value: number, unit: Signal['unit'], confidence = 1): Signal => ({
+    key,
+    label,
+    value,
+    unit,
+    source: 'test-fixture',
+    confidence,
+    observedAt: new Date().toISOString(),
+  });
+  return {
+    name: 'test-fixture',
+    async collect() {
+      return [
+        mk('tbill.yield.3m', '3M T-Bill yield', 4.5, 'pct', 0.95),
+        mk('vault.liquidity.usd', 'Vault stablecoin liquidity', 180_000, 'usd'),
+        mk('rwa.redemption.queue', 'RWA redemption queue depth', 40, 'count', 0.8),
+      ];
+    },
+  };
+}

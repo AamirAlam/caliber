@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { AgentReview } from '@caliber/shared';
+import type { AgentReview, Signal } from '@caliber/shared';
 import { runDeliberation, type Commit, type ProposeFn, type ReviewFn } from './runner.js';
 import type { DecisionInput } from '../decision/index.js';
-import { collectSignals, SimulatedSignalSource } from '../signals/index.js';
+import { collectSignals, type SignalSource } from '../signals/index.js';
 import { scoreRisk } from '../policy/index.js';
 import { samplePolicy } from '../samplePolicy.js';
-import { AppState } from '../state.js';
 
 async function inputFor(stress: boolean): Promise<DecisionInput> {
-  const state = new AppState(samplePolicy);
-  state.scenarioStress = stress;
-  const snapshot = await collectSignals([new SimulatedSignalSource(state)], 'snap_test');
+  const snapshot = await collectSignals([fixtureSource(stress)], 'snap_test');
   return { runId: 'r', policy: samplePolicy, risk: scoreRisk(snapshot), snapshot };
 }
 const stressInput = () => inputFor(true);
@@ -29,6 +26,28 @@ const reviewSeq =
 
 const goodLegs = [{ fromAssetId: 'tbill-rwa', toAssetId: 'usdc', weight: 0.12 }];
 const rebalanceCommit = (): Commit => ({ action: 'rebalance', legs: goodLegs, rationale: 'de-risk' });
+
+function fixtureSource(stress: boolean): SignalSource {
+  const mk = (key: string, label: string, value: number, unit: Signal['unit'], confidence = 1): Signal => ({
+    key,
+    label,
+    value,
+    unit,
+    source: 'test-fixture',
+    confidence,
+    observedAt: new Date().toISOString(),
+  });
+  return {
+    name: 'test-fixture',
+    async collect() {
+      return [
+        mk('tbill.yield.3m', '3M T-Bill yield', stress ? 4.5 : 5.1, 'pct', 0.95),
+        mk('vault.liquidity.usd', 'Vault stablecoin liquidity', stress ? 180_000 : 420_000, 'usd'),
+        mk('rwa.redemption.queue', 'RWA redemption queue depth', stress ? 40 : 3, 'count', 0.8),
+      ];
+    },
+  };
+}
 
 describe('runDeliberation — multi-agent self-correction', () => {
   it('approves a compliant rebalance the reviewer signs off on', async () => {

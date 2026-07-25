@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { AgentRunLog, TransactionRecord } from '@caliber/shared';
 import { generateRecommendation } from './agent/runner.js';
 import { readVaultStateCached } from './casper/reader.js';
@@ -7,12 +8,17 @@ import { evaluatePolicy } from './policy/index.js';
 import { CasperExecutor } from './execution/index.js';
 import { log } from './logger.js';
 import { scoreRisk } from './policy/index.js';
-import { collectSignals, SimulatedSignalSource, type SignalSource } from './signals/index.js';
-import { AppState } from './state.js';
+import { buildSignalSources, collectSignals, type SignalSource } from './signals/index.js';
+import type { AppState } from './state.js';
+
+export interface RebalanceExecutor {
+  submit(request: Parameters<CasperExecutor['submit']>[0]): Promise<TransactionRecord>;
+  waitForFinalization(hash: string): Promise<'pending' | 'finalized' | 'failed'>;
+}
 
 export interface OrchestratorDeps {
   audit: AuditStore;
-  executor: CasperExecutor;
+  executor: RebalanceExecutor;
   sources: SignalSource[];
   state: AppState;
 }
@@ -21,7 +27,7 @@ export function defaultDeps(audit: AuditStore, state: AppState): OrchestratorDep
   return {
     audit,
     executor: new CasperExecutor(),
-    sources: [new SimulatedSignalSource(state)],
+    sources: buildSignalSources(),
     state,
   };
 }
@@ -32,10 +38,10 @@ export function defaultDeps(audit: AuditStore, state: AppState): OrchestratorDep
  * at `await_approval` (with a candidate stashed on AppState) and returns; phase 2
  * happens in `executeApproved`. Hold/halt runs complete immediately.
  */
-export async function runAgentLoop(deps: OrchestratorDeps, seq: number): Promise<AgentRunLog> {
+export async function runAgentLoop(deps: OrchestratorDeps, _seq: number): Promise<AgentRunLog> {
   const { audit, state } = deps;
   const policy = state.activePolicy;
-  const runId = `run_${seq}`;
+  const runId = `run_${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}_${randomUUID().slice(0, 8)}`;
   const run: AgentRunLog = {
     id: runId,
     policyId: policy.id,
@@ -45,62 +51,73 @@ export async function runAgentLoop(deps: OrchestratorDeps, seq: number): Promise
   };
   await audit.saveRun(run);
 
-  const snapshot = await collectSignals(deps.sources, `snap_${seq}`);
-  await audit.saveSnapshot(snapshot);
-  state.latestSnapshot = snapshot;
+  try {
+    const snapshot = await collectSignals(deps.sources, `snap_${runId}`);
+    await audit.saveSnapshot(snapshot);
+    state.latestSnapshot = snapshot;
 
-  const risk = scoreRisk(snapshot);
-  state.latestRisk = risk;
-  run.stage = 'evaluate_policy';
-  run.snapshotId = snapshot.id;
-  run.riskScore = risk.score;
+    const risk = scoreRisk(snapshot);
+    state.latestRisk = risk;
+    run.stage = 'evaluate_policy';
+    run.snapshotId = snapshot.id;
+    run.riskScore = risk.score;
 
-  const vaultState = await readVaultStateCached();
-  // Short-term memory: last N prior decisions, so the agent reasons with history.
-  const memory = formatMemory(summarizeHistory(await audit.listRuns(), runId));
-  const { recommendation, toolTrace } = await generateRecommendation(
-    { runId, policy, risk, snapshot },
-    vaultState,
-    memory,
-  );
-  await audit.saveRecommendation(recommendation);
-  state.latestRecommendation = recommendation;
-  run.stage = 'generate_decision';
-  run.action = recommendation.action;
-  run.recommendationId = recommendation.id;
-  run.notes = `tools=[${toolTrace.join(', ')}]`;
+    const vaultState = await readVaultStateCached();
+    // Short-term memory: last N prior decisions, so the agent reasons with history.
+    const memory = formatMemory(summarizeHistory(await audit.listRuns(), runId));
+    const { recommendation, toolTrace } = await generateRecommendation(
+      { runId, policy, risk, snapshot },
+      vaultState,
+      memory,
+    );
+    await audit.saveRecommendation(recommendation);
+    state.latestRecommendation = recommendation;
+    run.stage = 'generate_decision';
+    run.action = recommendation.action;
+    run.recommendationId = recommendation.id;
+    run.notes = `tools=[${toolTrace.join(', ')}]`;
 
-  log.info('decision', {
-    runId,
-    action: recommendation.action,
-    risk: risk.score,
-    compliant: recommendation.compliancePassed,
-  });
-
-  if (recommendation.action === 'rebalance' && recommendation.rebalance) {
-    state.pendingRun = {
+    log.info('decision', {
       runId,
-      recommendation,
-      rebalance: recommendation.rebalance,
-      approvalToken: `tok_${runId}`,
-    };
-    if (policy.constraints.requireHumanApproval) {
-      run.stage = 'await_approval';
-      run.status = 'running';
-      await audit.saveRun(run);
-      log.info('awaiting human approval', { runId });
-      return run;
-    }
-    // Auto-approve path.
-    const { run: done } = await executeApproved(deps, runId, 'auto');
-    return done;
-  }
+      action: recommendation.action,
+      risk: risk.score,
+      compliant: recommendation.compliancePassed,
+    });
 
-  run.stage = 'done';
-  run.status = 'completed';
-  run.endedAt = new Date().toISOString();
-  await audit.saveRun(run);
-  return run;
+    if (recommendation.action === 'rebalance' && recommendation.rebalance) {
+      state.pendingRun = {
+        runId,
+        recommendation,
+        rebalance: recommendation.rebalance,
+        approvalToken: `tok_${runId}`,
+        snapshot,
+        risk,
+      };
+      await audit.savePendingApproval({ ...state.pendingRun, createdAt: new Date().toISOString() });
+      if (policy.constraints.requireHumanApproval) {
+        run.stage = 'await_approval';
+        run.status = 'running';
+        await audit.saveRun(run);
+        log.info('awaiting human approval', { runId });
+        return run;
+      }
+      // Auto-approve path.
+      const { run: done } = await executeApproved(deps, runId, 'auto');
+      return done;
+    }
+
+    run.stage = 'done';
+    run.status = 'completed';
+    run.endedAt = new Date().toISOString();
+    await audit.saveRun(run);
+    return run;
+  } catch (err) {
+    run.status = 'failed';
+    run.endedAt = new Date().toISOString();
+    run.notes = String(err);
+    await audit.saveRun(run);
+    throw err;
+  }
 }
 
 /**
@@ -113,7 +130,7 @@ export async function executeApproved(
   approver: string,
 ): Promise<{ run: AgentRunLog; tx: TransactionRecord }> {
   const { audit, state } = deps;
-  const pending = state.pendingRun;
+  const pending = state.pendingRun ?? (await audit.getPendingApproval(runId));
   if (!pending || pending.runId !== runId) {
     throw new Error(`No run awaiting approval with id ${runId}`);
   }
@@ -127,22 +144,21 @@ export async function executeApproved(
   };
 
   // Server-side re-check: the deterministic gate, not the AI, authorizes execution.
-  if (state.latestRisk && state.latestSnapshot) {
-    const violations = evaluatePolicy(
-      state.activePolicy,
-      state.latestRisk,
-      state.latestSnapshot,
-      pending.rebalance,
-    );
-    if (violations.length > 0) {
-      run.stage = 'await_approval';
-      run.status = 'rejected';
-      run.endedAt = new Date().toISOString();
-      run.notes = `rejected on re-check: ${violations.map((v) => v.constraint).join(', ')}`;
-      await audit.saveRun(run);
-      state.pendingRun = undefined;
-      throw new Error(`Compliance re-check failed: ${violations.map((v) => v.detail).join('; ')}`);
-    }
+  const violations = evaluatePolicy(
+    state.activePolicy,
+    pending.risk,
+    pending.snapshot,
+    pending.rebalance,
+  );
+  if (violations.length > 0) {
+    run.stage = 'await_approval';
+    run.status = 'rejected';
+    run.endedAt = new Date().toISOString();
+    run.notes = `rejected on re-check: ${violations.map((v) => v.constraint).join(', ')}`;
+    await audit.saveRun(run);
+    await audit.deletePendingApproval(runId);
+    state.pendingRun = undefined;
+    throw new Error(`Compliance re-check failed: ${violations.map((v) => v.detail).join('; ')}`);
   }
 
   run.stage = 'execute';
@@ -152,13 +168,15 @@ export async function executeApproved(
   await audit.saveTransaction(tx);
 
   run.stage = 'done';
-  run.status = 'completed';
+  run.status = tx.status === 'failed' ? 'failed' : 'completed';
   run.transactionId = tx.id;
   run.deployHash = tx.deployHash;
   run.approvedBy = approver;
+  run.notes = tx.status === 'failed' ? tx.error : run.notes;
   run.endedAt = new Date().toISOString();
   await audit.saveRun(run);
 
+  await audit.deletePendingApproval(runId);
   state.pendingRun = undefined;
 
   // Fire-and-forget finalization poll: updates the tx record once the deploy
@@ -172,7 +190,15 @@ export async function executeApproved(
 
 async function finalizeInBackground(deps: OrchestratorDeps, tx: TransactionRecord): Promise<void> {
   try {
-    const status = await deps.executor.waitForFinalization(tx.deployHash!);
+    let status: 'pending' | 'finalized' | 'failed' = 'pending';
+    for (let attempt = 0; attempt < 12 && status === 'pending'; attempt++) {
+      if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 5000));
+      status = await deps.executor.waitForFinalization(tx.deployHash!);
+    }
+    if (status === 'pending') {
+      log.warn('transaction finalization still pending', { id: tx.id });
+      return;
+    }
     await deps.audit.saveTransaction({
       ...tx,
       status,
