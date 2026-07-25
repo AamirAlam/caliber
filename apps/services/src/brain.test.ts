@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Signal } from '@caliber/shared';
-import { collectSignals, validateSignalSet, type SignalSource } from './signals/index.js';
+import {
+  buildOperatorSignalFeed,
+  collectSignals,
+  OperatorSignalSource,
+  validateSignalSet,
+  type SignalSource,
+} from './signals/index.js';
 import { evaluatePolicy, scoreRisk } from './policy/index.js';
 import { buildRebalanceFromLegs, decideAction } from './decision/index.js';
 import { samplePolicy } from './samplePolicy.js';
@@ -39,6 +45,13 @@ describe('signals + risk', () => {
       'tbill.yield.3m',
       'vault.liquidity.usd',
     ]);
+  });
+
+  it('provides a built-in operator signal feed with fresh required observations', async () => {
+    const feed = buildOperatorSignalFeed();
+    validateSignalSet(feed.signals);
+    const snapshot = await collectSignals([new OperatorSignalSource()], 'snap_operator');
+    expect(snapshot.signals).toHaveLength(3);
   });
 
   it('scores calm low and stress high', async () => {

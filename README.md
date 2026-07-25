@@ -108,8 +108,8 @@ pnpm --filter @caliber/contracts test     # contract tests (cargo odra, 5/5)
 Copy the env templates (done by `scripts/setup.sh`) and fill in as needed:
 
 - `apps/services/.env` — `CASPER_NODE_RPC_URL`, `CALIBER_VAULT_CONTRACT_HASH`,
-  `CASPER_SECRET_KEY_PATH` (+ `CALIBER_KEY_ALGO`), `CALIBER_SIGNAL_FEED_URL`,
-  `CALIBER_ADMIN_TOKEN`, and `CALIBER_DRY_RUN=false` for real testnet execution.
+  `CASPER_SECRET_KEY_PATH` (+ `CALIBER_KEY_ALGO`), `CALIBER_ADMIN_TOKEN`, and
+  `CALIBER_DRY_RUN=false` for real testnet execution.
 - **AI (optional):** set `ANTHROPIC_API_KEY` to enable the live Proposer + Risk-Reviewer
   agents. Swap providers with `CALIBER_LLM_PROVIDER` / `CALIBER_DECISION_MODEL`. Without a
   key, the deterministic decision path runs.
@@ -124,7 +124,7 @@ The safest production setup is:
   - Deploy the Fastify service with the repo-root `railway.toml` or `apps/services/railway.toml`.
   - Set `CALIBER_DATABASE_URL` or Railway `DATABASE_URL` for Postgres.
   - Review `apps/services/config/testnet-policy.json`; deployed modes load this policy directly.
-  - Set `CALIBER_SIGNAL_FEED_URL` to a live JSON feed that returns `Signal[]` or `{ "signals": Signal[] }`.
+  - Leave `CALIBER_SIGNAL_FEED_URL` empty to use the built-in operator testnet feed at `/signals/feed`, or set it to an external live feed that returns `Signal[]` or `{ "signals": Signal[] }`.
   - Set `CALIBER_ADMIN_TOKEN`; Vercel uses it server-side for `POST /runs` and `POST /approve`.
   - Set `PORT` via Railway defaults; the service already binds `0.0.0.0:$PORT`.
   - Set `CALIBER_DRY_RUN=false` and mount a real funded PEM file because `CASPER_SECRET_KEY_PATH` is read from the filesystem.

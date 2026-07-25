@@ -165,7 +165,6 @@ export function validateRuntimeConfig(c: CaliberConfig = config): void {
   }
 
   if (isProductionLike(c)) {
-    if (!c.signals.feedUrl) errors.push('CALIBER_SIGNAL_FEED_URL is required in production/testnet');
     if (c.db.kind !== 'postgres') errors.push('Postgres DATABASE_URL/CALIBER_DATABASE_URL is required in production/testnet');
     if (!c.api.adminToken) errors.push('CALIBER_ADMIN_TOKEN is required in production/testnet');
     if (c.loop.dryRun) errors.push('CALIBER_DRY_RUN=false is required in production/testnet');

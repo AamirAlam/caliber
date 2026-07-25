@@ -56,7 +56,8 @@ pnpm --filter @caliber/services run:once   # single configured loop entry
    `CALIBER_VAULT_CONTRACT_HASH`.
 2. Provide a funded testnet key at `CASPER_SECRET_KEY_PATH`.
 3. Review `config/testnet-policy.json`; deployed modes load this policy directly.
-4. Set `CALIBER_SIGNAL_FEED_URL` to a live JSON feed that returns `Signal[]` or
-   `{ "signals": Signal[] }`.
+4. Leave `CALIBER_SIGNAL_FEED_URL` empty to use the built-in operator testnet
+   feed at `/signals/feed`, or set it to an external live feed that returns
+   `Signal[]` or `{ "signals": Signal[] }`.
 5. Set Postgres via `CALIBER_DATABASE_URL` / `DATABASE_URL`, set
    `CALIBER_ADMIN_TOKEN`, and set `CALIBER_DRY_RUN=false`.

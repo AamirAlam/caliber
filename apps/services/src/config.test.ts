@@ -35,7 +35,6 @@ describe('runtime config modes', () => {
 
   it('rejects deployed modes without production prerequisites', () => {
     const c = loadConfig({ CALIBER_ENV: 'production' });
-    expect(() => validateRuntimeConfig(c)).toThrow(/CALIBER_SIGNAL_FEED_URL/);
     expect(() => validateRuntimeConfig(c)).toThrow(/Postgres/);
     expect(() => validateRuntimeConfig(c)).toThrow(/CALIBER_ADMIN_TOKEN/);
     expect(() => validateRuntimeConfig(c)).toThrow(/CALIBER_DRY_RUN=false/);

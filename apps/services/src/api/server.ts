@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import { readVaultState, readVaultStateCached } from '../casper/reader.js';
 import { executeApproved, type OrchestratorDeps } from '../orchestrator.js';
 import type { Scheduler } from '../scheduler/index.js';
+import { buildOperatorSignalFeed, HttpSignalSource, validateSignalSet } from '../signals/index.js';
 
 /**
  * Thin HTTP API the dashboard consumes. Reads come from AppState / the audit
@@ -37,6 +38,7 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
       status: '/status',
       metrics: '/metrics',
       policy: '/policy',
+      signalFeed: '/signals/feed',
       runs: '/runs',
       vaultState: '/vault/state',
     },
@@ -47,6 +49,7 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
       scheduler: 'ok',
       vault: 'ok',
       database: 'ok',
+      signals: 'ok',
     };
     try {
       await readVaultState();
@@ -57,6 +60,11 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
       await audit.listRuns();
     } catch {
       checks.database = 'fail';
+    }
+    try {
+      await signalFeedReady();
+    } catch {
+      checks.signals = 'fail';
     }
     const ok = Object.values(checks).every((v) => v === 'ok');
     return reply.code(ok ? 200 : 503).send({ status: ok ? 'ready' : 'not_ready', checks, scheduler: scheduler.status() });
@@ -164,6 +172,7 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
     };
   });
   app.get('/policy', async () => state.activePolicy);
+  app.get('/signals/feed', async () => buildOperatorSignalFeed());
 
   app.get('/signals/latest', async (_req, reply) =>
     state.latestSnapshot ?? reply.code(404).send({ error: 'no snapshot yet' }),
@@ -219,6 +228,14 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
   });
 
   return app;
+}
+
+export async function signalFeedReady(): Promise<void> {
+  if (config.signals.feedUrl) {
+    validateSignalSet(await new HttpSignalSource().collect());
+    return;
+  }
+  validateSignalSet(buildOperatorSignalFeed().signals);
 }
 
 function authorize(req: FastifyRequest, reply: FastifyReply): boolean {

@@ -74,6 +74,19 @@ describe('service observability API', () => {
     });
   });
 
+  it('serves the built-in signal feed', async () => {
+    const { app } = await testServer();
+    const res = await app.inject({ method: 'GET', url: '/signals/feed' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      signals: [
+        { key: 'tbill.yield.3m' },
+        { key: 'vault.liquidity.usd' },
+        { key: 'rwa.redemption.queue' },
+      ],
+    });
+  });
+
   it('exports metrics for runs, risk, pending approval, and deploy timing', async () => {
     const { app, audit, state } = await testServer();
     const tx: TransactionRecord = {
