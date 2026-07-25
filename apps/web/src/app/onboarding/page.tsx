@@ -4,13 +4,15 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { CaliberMark } from '@/components/SiteHeader';
-import { api } from '@/lib/api';
+import { api, type FeedStatus } from '@/lib/api';
+import { feedFreshness, managedSignalFeedUrl } from '@/lib/signalFeed';
 import { activateWorkspace } from '@/lib/workspaces';
 import {
   authenticateWallet,
   connectWalletProvider,
   disconnectWallet,
   loadWalletSession,
+  subscribeWalletPublicKey,
 } from '@/lib/walletClient';
 import type { WalletSession } from '@/lib/walletAuth';
 
@@ -92,7 +94,7 @@ export default function OnboardingPage() {
   const [riskLimit, setRiskLimit] = useState(70);
   const [policyPreset, setPolicyPreset] = useState<PolicyPresetId>('balanced');
   const [sourceMode, setSourceMode] = useState<SourceMode>('operator');
-  const [feedUrl, setFeedUrl] = useState('');
+  const [feedStatus, setFeedStatus] = useState<FeedStatus | null>(null);
   const [activating, setActivating] = useState(false);
   const [activationError, setActivationError] = useState<string | null>(null);
 
@@ -102,7 +104,9 @@ export default function OnboardingPage() {
   const workspaceReady = workspace.trim().length > 2;
   const vaultReady = vault.trim().length > 12;
   const allocationReady = totalAllocation === 100;
-  const signalReady = sourceMode === 'operator' || feedUrl.trim().length > 0;
+  const signalReady = sourceMode === 'operator';
+  const managedFeedUrl = managedSignalFeedUrl();
+  const managedFeedFreshness = feedFreshness(feedStatus?.capturedAt ?? undefined);
   const ready = Boolean(wallet) && workspaceReady && vaultReady && allocationReady && signalReady;
   const summary = useMemo(
     () => [
@@ -112,9 +116,10 @@ export default function OnboardingPage() {
       { label: 'Vault', value: vault ? `${vault.slice(0, 10)}...${vault.slice(-8)}` : 'Not connected' },
       { label: 'Policy', value: `${rwaTarget}% RWA / ${stableTarget}% stable / ${nativeTarget}% native` },
       { label: 'Risk ceiling', value: `${riskLimit}/100` },
-      { label: 'Signal source', value: sourceMode === 'operator' ? 'Caliber operator feed' : feedUrl || 'External feed pending' },
+      { label: 'Signal source', value: sourceMode === 'operator' ? 'Self managed feed' : 'External feed coming soon' },
+      { label: 'Feed URL', value: sourceMode === 'operator' ? managedFeedUrl : 'Coming soon' },
     ],
-    [connectedAddress, feedUrl, nativeTarget, riskLimit, rwaTarget, selectedPolicyPresetLabel, sourceMode, stableTarget, vault, wallet, workspace],
+    [connectedAddress, managedFeedUrl, nativeTarget, riskLimit, rwaTarget, selectedPolicyPresetLabel, sourceMode, stableTarget, vault, wallet, workspace],
   );
 
   const onActivateWorkspace = async () => {
@@ -134,7 +139,7 @@ export default function OnboardingPage() {
       },
       signals: {
         mode: sourceMode,
-        feedUrl: feedUrl.trim(),
+        feedUrl: sourceMode === 'operator' ? managedFeedUrl : '',
       },
     } as const;
 
@@ -150,6 +155,11 @@ export default function OnboardingPage() {
   };
 
   useEffect(() => {
+    const unsubscribe = subscribeWalletPublicKey((publicKey) => {
+      setConnectedAddress(publicKey);
+      setWalletPermissionConfirmed(true);
+      setWalletError(null);
+    });
     void loadWalletSession()
       .then((session) => {
         setWallet(session);
@@ -157,6 +167,15 @@ export default function OnboardingPage() {
         setWalletPermissionConfirmed(Boolean(session));
       })
       .catch(() => setWallet(null));
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    void api.getFeedStatus().then(setFeedStatus);
+    const interval = setInterval(() => {
+      void api.getFeedStatus().then(setFeedStatus);
+    }, 15000);
+    return () => clearInterval(interval);
   }, []);
 
   const onConnectWallet = async () => {
@@ -166,6 +185,10 @@ export default function OnboardingPage() {
       if (publicKey) {
         setConnectedAddress(publicKey);
         setWallet(await authenticateWallet(publicKey));
+        return;
+      }
+      if (walletPermissionConfirmed) {
+        setWalletError('Wallet is connected, but the extension did not expose an active public key. Paste the wallet public key to continue.');
         return;
       }
       const connectedPublicKey = await connectWalletProvider();
@@ -217,6 +240,8 @@ export default function OnboardingPage() {
     setPolicyPreset('custom');
     setRiskLimit(value);
   };
+
+  const walletHasPublicKeyInput = Boolean(connectedAddress || manualAddress.trim());
 
   return (
     <main className="min-h-screen bg-canvas">
@@ -328,25 +353,42 @@ export default function OnboardingPage() {
             {step === 3 && (
               <SetupBlock
                 title="Choose signal sources"
-                description="Use Caliber's operator feed or point this treasury at an external signal feed."
+                description="Use the self managed feed running on the Caliber backend, or point this treasury at an external signal feed."
               >
                 <Segmented
                   value={sourceMode}
                   onChange={setSourceMode}
                   options={[
-                    { value: 'operator', label: 'Caliber operator feed' },
+                    { value: 'operator', label: 'Self managed' },
                     { value: 'external', label: 'External feed URL' },
                   ]}
                 />
+                {sourceMode === 'operator' && (
+                  <div className="rounded-xl border border-slate-900/[0.07] bg-slate-50 p-4">
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2 w-2 rounded-full ${managedFeedFreshness.active ? 'bg-signal-emerald' : 'bg-slate-300'}`} />
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {managedFeedFreshness.status}
+                      </p>
+                    </div>
+                    <a
+                      href={managedFeedUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 block break-all font-mono text-sm font-medium text-brand-600 hover:text-brand-700"
+                    >
+                      {managedFeedUrl}
+                    </a>
+                    <p className="mt-2 text-xs text-slate-500">{managedFeedFreshness.label}</p>
+                  </div>
+                )}
                 {sourceMode === 'external' && (
-                  <Field label="Signal feed URL">
-                    <input
-                      className="input"
-                      value={feedUrl}
-                      onChange={(e) => setFeedUrl(e.target.value)}
-                      placeholder="https://..."
-                    />
-                  </Field>
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
+                    <p className="text-sm font-semibold text-ink-900">External feeds are coming soon</p>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                      Self managed Caliber backend signals are available now. Custom external feed onboarding will be enabled after provider validation and monitoring controls are ready.
+                    </p>
+                  </div>
                 )}
               </SetupBlock>
             )}
@@ -380,16 +422,23 @@ export default function OnboardingPage() {
                           {wallet
                             ? 'Authenticated and ready to own this treasury workspace.'
                             : connectedAddress
-                              ? 'Wallet connected. Sign the Caliber message to finish authentication.'
-                              : 'Wallet permission is confirmed. Paste the wallet public key below, then authenticate.'}
+                              ? 'Wallet address detected. Continue to create the treasury session.'
+                              : 'Wallet permission is confirmed. Paste the wallet public key below to continue.'}
                         </p>
                       )}
                     </div>
                     <button
                       onClick={wallet ? onDisconnectWallet : onConnectWallet}
-                      className="btn-ghost w-full sm:w-auto"
+                      disabled={!wallet && walletPermissionConfirmed && !walletHasPublicKeyInput}
+                      className="btn-ghost w-full disabled:opacity-40 sm:w-auto"
                     >
-                      {wallet ? 'Disconnect wallet' : walletPermissionConfirmed || connectedAddress ? 'Authenticate wallet' : 'Connect wallet'}
+                      {wallet
+                        ? 'Disconnect wallet'
+                        : connectedAddress
+                          ? 'Authenticate wallet'
+                          : walletPermissionConfirmed
+                            ? 'Use pasted public key'
+                            : 'Connect wallet'}
                     </button>
                   </div>
                   {walletPermissionConfirmed && !connectedAddress && !wallet && (
@@ -469,7 +518,7 @@ function ActivationChecklist({
     { label: 'Name the workspace', ok: workspaceReady },
     { label: 'Connect a vault package hash', ok: vaultReady },
     { label: 'Set allocations to 100%', ok: allocationReady },
-    { label: 'Choose a valid signal source', ok: signalReady },
+    { label: 'Use the self managed signal feed', ok: signalReady },
   ];
   return (
     <div className="mt-4 grid gap-2 rounded-xl border border-slate-900/[0.07] bg-slate-50 p-3 text-sm">

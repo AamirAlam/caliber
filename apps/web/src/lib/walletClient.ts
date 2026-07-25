@@ -5,29 +5,46 @@ interface CasperWalletLike {
   requestConnection?: () => Promise<unknown>;
   connect?: () => Promise<unknown>;
   isConnected?: () => Promise<boolean> | boolean;
-  signMessage?: (message: string, publicKey?: string) => Promise<unknown> | unknown;
+  signMessage?: (publicKey: string, message: string) => Promise<unknown> | unknown;
   sign?: (message: string) => Promise<unknown> | unknown;
 }
 
 declare global {
   interface Window {
     casperlabsHelper?: CasperWalletLike;
-    CasperWalletProvider?: (() => CasperWalletLike) | CasperWalletLike;
+    CasperWalletProvider?: ((options?: { timeout: number }) => CasperWalletLike) | CasperWalletLike;
   }
 }
+
+const walletRequestTimeoutMs = 30 * 60 * 1000;
+let cachedProviders: CasperWalletLike[] | null = null;
 
 export function hasWalletProvider(): boolean {
   return getProvider() !== null;
 }
 
+export function subscribeWalletPublicKey(onPublicKey: (publicKey: string) => void): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  const handler = (event: Event) => {
+    const publicKey = normalizePublicKey((event as CustomEvent<unknown>).detail);
+    if (publicKey) onPublicKey(publicKey);
+  };
+  addWalletEventListeners(handler);
+  return () => removeWalletEventListeners(handler);
+}
+
 export async function connectWalletProvider(): Promise<string | null> {
-  const provider = getProvider();
-  if (!provider) throw new Error('Casper wallet extension was not found.');
+  const providers = getProviders();
+  if (providers.length === 0) throw new Error('Casper wallet extension was not found.');
+  const eventPublicKey = waitForConnectedPublicKey();
+  const provider = providers.find((item) => item.requestConnection || item.connect) ?? providers[0]!;
   const connection = await (provider.requestConnection?.() ?? provider.connect?.() ?? Promise.resolve(true));
   const publicKeyFromConnection = normalizePublicKey(connection);
   if (publicKeyFromConnection) return publicKeyFromConnection;
   const connected = await readConnected(provider, connection);
   if (!connected) throw new Error('Wallet connection was not approved.');
+  const publicKeyFromEvent = eventPublicKey ? await eventPublicKey : null;
+  if (publicKeyFromEvent) return publicKeyFromEvent;
   return null;
 }
 
@@ -38,18 +55,16 @@ export async function connectWallet(): Promise<WalletSession> {
 }
 
 export async function authenticateWallet(publicKey: string): Promise<WalletSession> {
-  const provider = getProvider();
-  if (!provider) throw new Error('Casper wallet extension was not found.');
-  const challenge = await fetch('/api/wallet/session', { method: 'PUT' }).then((res) => res.json() as Promise<{ message: string }>);
-  const signature = await signWalletMessage(provider, challenge.message, publicKey);
+  const trimmedPublicKey = normalizePublicKey(publicKey);
+  if (!trimmedPublicKey) {
+    throw new Error('Wallet public key is required before authentication.');
+  }
   const res = await fetch('/api/wallet/session', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      accountHash: publicKey,
-      publicKey,
-      signature,
-      message: challenge.message,
+      accountHash: trimmedPublicKey,
+      publicKey: trimmedPublicKey,
     }),
   });
   if (!res.ok) throw new Error('Wallet session could not be created.');
@@ -69,10 +84,10 @@ export async function loadWalletSession(): Promise<WalletSession | null> {
 }
 
 export async function signApproval(runId: string, workspaceId: string, wallet: WalletSession) {
-  const provider = getProvider();
-  if (!provider) throw new Error('Casper wallet extension was not found.');
+  const providers = getProviders();
+  if (providers.length === 0) throw new Error('Casper wallet extension was not found.');
   const message = walletApprovalMessage(runId, workspaceId, wallet.accountHash);
-  const signature = await signWalletMessage(provider, message, wallet.publicKey ?? wallet.accountHash);
+  const signature = await signWalletMessage(providers, message, wallet.publicKey ?? wallet.accountHash);
   return {
     accountHash: wallet.accountHash,
     publicKey: wallet.publicKey,
@@ -83,11 +98,77 @@ export async function signApproval(runId: string, workspaceId: string, wallet: W
 }
 
 function getProvider(): CasperWalletLike | null {
-  if (typeof window === 'undefined') return null;
-  const maybeProvider = window.CasperWalletProvider;
-  if (typeof maybeProvider === 'function') return maybeProvider();
-  return window.casperlabsHelper ?? maybeProvider ?? null;
+  return getProviders()[0] ?? null;
 }
+
+function getProviders(): CasperWalletLike[] {
+  if (typeof window === 'undefined') return [];
+  if (cachedProviders) return cachedProviders;
+  const maybeProvider = window.CasperWalletProvider;
+  const providers = [
+    window.casperlabsHelper,
+    typeof maybeProvider === 'function' ? maybeProvider({ timeout: walletRequestTimeoutMs }) : maybeProvider,
+  ].filter((provider): provider is CasperWalletLike => Boolean(provider));
+  cachedProviders = Array.from(new Set(providers));
+  return cachedProviders;
+}
+
+function waitForConnectedPublicKey(): Promise<string | null> | null {
+  if (typeof window === 'undefined') return null;
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      removeWalletEventListeners(onWalletEvent);
+      if (timeout) clearTimeout(timeout);
+    };
+
+    const finish = (publicKey: string | null) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(publicKey);
+    };
+
+    const onWalletEvent = (event: Event) => {
+      const publicKey = normalizePublicKey((event as CustomEvent<unknown>).detail);
+      if (publicKey) finish(publicKey);
+    };
+
+    addWalletEventListeners(onWalletEvent);
+    timeout = setTimeout(() => finish(null), 10_000);
+  });
+}
+
+function addWalletEventListeners(handler: EventListener): void {
+  if (typeof window === 'undefined') return;
+  walletEventTargets().forEach((target) => {
+    walletEventNames.forEach((eventName) => target.addEventListener(eventName, handler));
+  });
+}
+
+function removeWalletEventListeners(handler: EventListener): void {
+  if (typeof window === 'undefined') return;
+  walletEventTargets().forEach((target) => {
+    walletEventNames.forEach((eventName) => target.removeEventListener(eventName, handler));
+  });
+}
+
+function walletEventTargets(): EventTarget[] {
+  return [window, document];
+}
+
+const walletEventNames = [
+  'casper-wallet:connected',
+  'casper-wallet:activeKeyChanged',
+  'casper-wallet:active-key-changed',
+  'casper-wallet:accountChanged',
+  'casper-wallet:account-changed',
+  'signer:connected',
+  'signer:activeKeyChanged',
+  'signer:active-key-changed',
+] as const;
 
 async function readConnected(provider: CasperWalletLike, connection: unknown): Promise<boolean> {
   if (typeof connection === 'boolean') return connection;
@@ -99,38 +180,90 @@ async function readConnected(provider: CasperWalletLike, connection: unknown): P
 }
 
 async function signWalletMessage(
-  provider: CasperWalletLike,
+  providers: CasperWalletLike[],
   message: string,
   publicKey?: string,
 ): Promise<string> {
-  const result = await (provider.signMessage?.(message, publicKey) ?? provider.sign?.(message));
-  const signature = normalizeSignature(result);
-  if (!signature) throw new Error('Wallet did not sign the message.');
-  return signature;
+  if (!publicKey) throw new Error('Wallet public key is required before signing.');
+  let lastError: unknown = null;
+  for (const provider of providers) {
+    try {
+      const result = provider.signMessage
+        ? await provider.signMessage(publicKey, message)
+        : await provider.sign?.(message);
+      const signature = normalizeSignature(result);
+      if (signature) return signature;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  if (lastError) throw lastError;
+  throw new Error('Wallet did not sign the message.');
 }
 
 function normalizeSignature(result: unknown): string | null {
   if (typeof result === 'string') return result;
   if (!result || typeof result !== 'object') return null;
-  const body = result as { signature?: unknown; signatureHex?: unknown; sig?: unknown };
-  if (typeof body.signature === 'string') return body.signature;
+  const body = result as { cancelled?: unknown; signature?: unknown; signatureHex?: unknown; sig?: unknown };
+  if (body.cancelled) return null;
   if (typeof body.signatureHex === 'string') return body.signatureHex;
+  if (typeof body.signature === 'string') return body.signature;
   if (typeof body.sig === 'string') return body.sig;
   return null;
 }
 
 function normalizePublicKey(result: unknown): string | null {
-  if (typeof result === 'string') return result;
+  if (Array.isArray(result)) {
+    for (const item of result) {
+      const publicKey = normalizePublicKey(item);
+      if (publicKey) return publicKey;
+    }
+    return null;
+  }
+  if (typeof result === 'string') {
+    const trimmed = result.trim();
+    if (!trimmed) return null;
+    if (isCasperPublicKeyHex(trimmed)) return trimmed;
+    if (trimmed.startsWith('{')) {
+      try {
+        return normalizePublicKey(JSON.parse(trimmed));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
   if (!result || typeof result !== 'object') return null;
   const body = result as {
     publicKey?: unknown;
+    publicKeyHex?: unknown;
     activePublicKey?: unknown;
+    activeKey?: unknown;
+    signingPublicKey?: unknown;
+    signingPublicKeyHex?: unknown;
     account?: unknown;
     accountHash?: unknown;
+    detail?: unknown;
+    data?: unknown;
+    result?: unknown;
   };
-  if (typeof body.publicKey === 'string') return body.publicKey;
-  if (typeof body.activePublicKey === 'string') return body.activePublicKey;
-  if (typeof body.account === 'string') return body.account;
-  if (typeof body.accountHash === 'string') return body.accountHash;
+  const publicKey =
+    body.publicKey ??
+    body.publicKeyHex ??
+    body.activePublicKey ??
+    body.activeKey ??
+    body.signingPublicKey ??
+    body.signingPublicKeyHex ??
+    body.account ??
+    body.accountHash ??
+    body.detail ??
+    body.data ??
+    body.result;
+  if (typeof publicKey === 'string') return normalizePublicKey(publicKey);
+  if (publicKey && typeof publicKey === 'object') return normalizePublicKey(publicKey);
   return null;
+}
+
+function isCasperPublicKeyHex(value: string): boolean {
+  return /^(01[0-9a-f]{64}|02[0-9a-f]{66})$/i.test(value);
 }

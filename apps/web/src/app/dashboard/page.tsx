@@ -4,9 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AGENT_ROLES } from '@caliber/shared';
 import type { Recommendation, RiskScore, SignalSnapshot, TraceStep, TreasuryPolicy } from '@caliber/shared';
-import { api, type VaultState } from '@/lib/api';
+import { api, type FeedStatus, type VaultState } from '@/lib/api';
 import { PageLoader } from '@/components/Spinner';
 import { MaintenanceMode } from '@/components/MaintenanceMode';
+import { feedFreshness, managedSignalFeedUrl } from '@/lib/signalFeed';
 import { activateWorkspace, getWorkspace, type TreasuryWorkspace } from '@/lib/workspaces';
 import {
   authenticateWallet,
@@ -15,6 +16,7 @@ import {
   hasWalletProvider,
   loadWalletSession,
   signApproval,
+  subscribeWalletPublicKey,
 } from '@/lib/walletClient';
 import type { WalletSession } from '@/lib/walletAuth';
 
@@ -35,6 +37,7 @@ export default function DashboardPage() {
   const [risk, setRisk] = useState<RiskScore | null>(null);
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [vault, setVault] = useState<VaultState | null>(null);
+  const [feedStatus, setFeedStatus] = useState<FeedStatus | null>(null);
   const [pendingRunId, setPendingRunId] = useState<string | null>(null);
   const [deployHash, setDeployHash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -76,6 +79,11 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    const unsubscribeWallet = subscribeWalletPublicKey((publicKey) => {
+      setConnectedAddress(publicKey);
+      setWalletPermissionConfirmed(true);
+      setWalletError(null);
+    });
     const workspaceId = new URLSearchParams(window.location.search).get('workspace');
     const localWorkspace = getWorkspace(workspaceId);
     setWorkspace(localWorkspace);
@@ -97,8 +105,16 @@ export default function DashboardPage() {
       })
       .catch(() => setWallet(null));
     void refresh();
+    void api.getFeedStatus().then(setFeedStatus);
     const t = setInterval(() => void refresh(), 4000);
-    return () => clearInterval(t);
+    const feedStatusInterval = setInterval(() => {
+      void api.getFeedStatus().then(setFeedStatus);
+    }, 15000);
+    return () => {
+      unsubscribeWallet();
+      clearInterval(t);
+      clearInterval(feedStatusInterval);
+    };
   }, [refresh]);
 
   const onConnectWallet = async () => {
@@ -108,6 +124,10 @@ export default function DashboardPage() {
       if (publicKey) {
         setConnectedAddress(publicKey);
         setWallet(await authenticateWallet(publicKey));
+        return;
+      }
+      if (walletPermissionConfirmed) {
+        setWalletError('Wallet is connected, but the extension did not expose an active public key. Paste the wallet public key to continue.');
         return;
       }
       const connectedPublicKey = await connectWalletProvider();
@@ -208,6 +228,10 @@ export default function DashboardPage() {
 
   const workspaceTitle = workspace.name;
   const workspacePolicy = `${workspace.policy.rwaTarget}% RWA / ${workspace.policy.stableTarget}% stable / ${workspace.policy.nativeTarget}% CSPR`;
+  const walletHasPublicKeyInput = Boolean(connectedAddress || manualAddress.trim());
+  const workspaceSignalFeedUrl =
+    workspace.signals.mode === 'operator' ? managedSignalFeedUrl() : workspace.signals.feedUrl || 'External feed';
+  const signalFreshness = feedFreshness(feedStatus?.capturedAt ?? snapshot?.capturedAt);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 pb-28 sm:px-6 sm:py-8 lg:px-8 lg:py-10 lg:pb-10">
@@ -243,9 +267,9 @@ export default function DashboardPage() {
                   ? 'You can trigger runs and sign approvals for this treasury.'
                   : 'This wallet is connected, but it does not own the selected treasury.'
                   : connectedAddress
-                  ? 'Wallet connected. Sign the Caliber message to finish authentication.'
+                  ? 'Wallet address detected. Continue to create the treasury session.'
                   : walletPermissionConfirmed
-                    ? 'Paste the wallet public key, then authenticate.'
+                    ? 'Paste the wallet public key to continue.'
                 : 'Connect the treasury wallet to create runs or approve policy-gated rebalances.'}
             </p>
             {connectedAddress && (
@@ -267,8 +291,16 @@ export default function DashboardPage() {
               Disconnect wallet
             </button>
           ) : (
-            <button onClick={onConnectWallet} className="btn-ghost w-full sm:w-auto">
-              {connectedAddress || walletPermissionConfirmed ? 'Authenticate wallet' : 'Connect wallet'}
+            <button
+              onClick={onConnectWallet}
+              disabled={walletPermissionConfirmed && !walletHasPublicKeyInput}
+              className="btn-ghost w-full disabled:opacity-40 sm:w-auto"
+            >
+              {connectedAddress
+                ? 'Authenticate wallet'
+                : walletPermissionConfirmed
+                  ? 'Use pasted public key'
+                  : 'Connect wallet'}
             </button>
           )}
         </div>
@@ -280,13 +312,18 @@ export default function DashboardPage() {
         )}
       </section>
 
-      <section className="mt-4 grid gap-3 rounded-xl border border-slate-900/[0.07] bg-white p-4 shadow-sm sm:grid-cols-3">
+      <section className="mt-4 grid gap-3 rounded-xl border border-slate-900/[0.07] bg-white p-4 shadow-sm sm:grid-cols-4">
         <WorkspaceFact label="Owner" value={workspace.ownerAccount || 'Not connected'} />
         <WorkspaceFact label="Vault" value={`${workspace.vaultContractHash.slice(0, 10)}...${workspace.vaultContractHash.slice(-8)}`} />
         <WorkspaceFact
           label="Signals"
-          value={workspace.signals.mode === 'operator' ? 'Caliber operator feed' : workspace.signals.feedUrl || 'External feed'}
+          value={workspace.signals.mode === 'operator' ? 'Self managed feed' : 'External feed'}
+          status={{
+            label: signalFreshness.status,
+            tone: signalFreshness.active ? 'active' : 'inactive',
+          }}
         />
+        <WorkspaceFact label="Feed URL" value={workspaceSignalFeedUrl} href={workspaceSignalFeedUrl} detail={signalFreshness.label} />
       </section>
 
       {/* ── Decision hero: the single focal element ── */}
@@ -327,9 +364,10 @@ export default function DashboardPage() {
               ) : (
                 <button
                   onClick={onConnectWallet}
-                  className="btn-primary w-full shadow-pop sm:w-auto"
+                  disabled={walletPermissionConfirmed && !walletHasPublicKeyInput}
+                  className="btn-primary w-full shadow-pop disabled:opacity-40 sm:w-auto"
                 >
-                  Connect wallet
+                  {walletPermissionConfirmed ? 'Use pasted public key' : 'Connect wallet'}
                 </button>
               )}
               {!walletOwnsWorkspace && rec?.action === 'rebalance' && (
@@ -552,11 +590,41 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{children}</h2>;
 }
 
-function WorkspaceFact({ label, value }: { label: string; value: string }) {
+function WorkspaceFact({
+  label,
+  value,
+  href,
+  detail,
+  status,
+}: {
+  label: string;
+  value: string;
+  href?: string;
+  detail?: string;
+  status?: { label: string; tone: 'active' | 'inactive' };
+}) {
   return (
     <div className="min-w-0">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-1 truncate text-sm font-medium text-slate-700">{value}</p>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1 block truncate text-sm font-medium text-brand-600 hover:text-brand-700"
+        >
+          {value}
+        </a>
+      ) : (
+        <p className="mt-1 truncate text-sm font-medium text-slate-700">{value}</p>
+      )}
+      {status && (
+        <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+          <span className={`h-2 w-2 rounded-full ${status.tone === 'active' ? 'bg-signal-emerald' : 'bg-slate-300'}`} />
+          {status.label}
+        </p>
+      )}
+      {detail && <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>}
     </div>
   );
 }

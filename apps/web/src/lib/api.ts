@@ -28,6 +28,16 @@ async function get<T>(path: string): Promise<T | null> {
   }
 }
 
+async function getLocal<T>(path: string): Promise<T | null> {
+  try {
+    const res = await fetch(path, { cache: 'no-store' });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 async function post<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
@@ -47,6 +57,13 @@ export interface VaultState {
   contractHash: string;
 }
 
+export interface FeedStatus {
+  active: boolean;
+  capturedAt: string | null;
+  signalCount: number;
+  url: string;
+}
+
 export const api = {
   getPolicy: () => get<TreasuryPolicy>('/policy'),
   getLatestSignals: () => get<SignalSnapshot>('/signals/latest'),
@@ -56,6 +73,7 @@ export const api = {
     get<AgentRunLog[]>(workspaceId ? `/runs?workspaceId=${encodeURIComponent(workspaceId)}` : '/runs'),
   getRun: (id: string) => get<RunDetail>(`/runs/${id}`),
   getVaultState: () => get<VaultState>('/vault/state'),
+  getFeedStatus: () => getLocal<FeedStatus>('/api/feed/status'),
   getWorkspaces: () => get<TreasuryWorkspace[]>('/workspaces'),
   getWorkspace: (id: string) => get<TreasuryWorkspace>(`/workspaces/${id}`),
   createWorkspace: (workspace: CreateTreasuryWorkspace) =>
