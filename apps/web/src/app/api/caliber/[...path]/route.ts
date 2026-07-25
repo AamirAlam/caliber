@@ -24,6 +24,7 @@ async function forward(req: NextRequest, path: string[]): Promise<NextResponse> 
   headers.delete('host');
   headers.delete('connection');
   headers.delete('content-length');
+  headers.delete('accept-encoding');
   if (process.env.CALIBER_ADMIN_TOKEN && req.method !== 'GET' && req.method !== 'HEAD') {
     headers.set('authorization', `Bearer ${process.env.CALIBER_ADMIN_TOKEN}`);
   }
@@ -41,9 +42,14 @@ async function forward(req: NextRequest, path: string[]): Promise<NextResponse> 
 
   try {
     const upstream = await fetch(targetUrl(path, req), init);
-    return new NextResponse(upstream.body, {
+    const body = await upstream.arrayBuffer();
+    const responseHeaders = new Headers(upstream.headers);
+    responseHeaders.delete('content-encoding');
+    responseHeaders.delete('content-length');
+    responseHeaders.delete('transfer-encoding');
+    return new NextResponse(body, {
       status: upstream.status,
-      headers: upstream.headers,
+      headers: responseHeaders,
     });
   } catch (error) {
     return NextResponse.json(
