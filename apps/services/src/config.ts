@@ -48,8 +48,9 @@ export interface CaliberConfig {
 export const config = loadConfig(process.env);
 
 export function loadConfig(env: NodeJS.ProcessEnv): CaliberConfig {
+  const runtimeEnv = env.CALIBER_ENV ?? normalizeNodeEnv(env.NODE_ENV);
   return {
-    env: env.CALIBER_ENV ?? normalizeNodeEnv(env.NODE_ENV),
+    env: runtimeEnv,
     casper: {
       rpcUrl: env.CASPER_NODE_RPC_URL ?? 'https://node.testnet.casper.network/rpc',
       networkName: env.CASPER_NETWORK_NAME ?? 'casper-test',
@@ -78,7 +79,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): CaliberConfig {
     },
     policy: {
       json: env.CALIBER_POLICY_JSON ?? '',
-      path: env.CALIBER_POLICY_PATH ?? '',
+      path: env.CALIBER_POLICY_PATH ?? defaultPolicyPath(runtimeEnv),
     },
     mcp: {
       casperUrl: env.CALIBER_CASPER_MCP_URL ?? '',
@@ -128,6 +129,10 @@ function aiConfig(env: NodeJS.ProcessEnv): CaliberConfig['ai'] {
 
 function normalizeNodeEnv(nodeEnv: string | undefined): RuntimeMode {
   return nodeEnv === 'production' ? 'production' : 'development';
+}
+
+function defaultPolicyPath(runtimeEnv: RuntimeMode | string): string {
+  return runtimeEnv === 'testnet' ? './config/testnet-policy.json' : '';
 }
 
 function numberEnv(value: string | undefined, fallback: number): number {

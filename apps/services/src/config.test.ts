@@ -58,6 +58,15 @@ describe('runtime config modes', () => {
     expect(() => validateRuntimeConfig(c)).not.toThrow();
   });
 
+  it('defaults testnet to the checked-in policy file', () => {
+    const c = loadConfig({
+      ...baseEnv,
+      CALIBER_POLICY_JSON: '',
+    });
+    expect(c.policy.path).toBe('./config/testnet-policy.json');
+    expect(() => validateRuntimeConfig(c)).not.toThrow();
+  });
+
   it('rejects deployed modes without production prerequisites', () => {
     const c = loadConfig({ CALIBER_ENV: 'production' });
     expect(() => validateRuntimeConfig(c)).toThrow(/CALIBER_SIGNAL_FEED_URL/);

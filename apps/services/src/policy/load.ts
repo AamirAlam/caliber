@@ -5,8 +5,8 @@ import { config, isProductionLike, type CaliberConfig } from '../config.js';
 import { samplePolicy } from '../samplePolicy.js';
 
 export function loadPolicy(c: CaliberConfig = config): TreasuryPolicy {
-  if (c.policy.json) return parsePolicy(c.policy.json, 'CALIBER_POLICY_JSON');
   if (c.policy.path) return parsePolicy(readFileSync(c.policy.path, 'utf8'), c.policy.path);
+  if (c.policy.json) return parsePolicy(c.policy.json, 'CALIBER_POLICY_JSON');
   if (isProductionLike(c)) {
     throw new Error('CALIBER_POLICY_JSON or CALIBER_POLICY_PATH is required in production/testnet');
   }
