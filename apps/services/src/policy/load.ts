@@ -4,11 +4,11 @@ import { ZodError } from 'zod';
 import { config, isProductionLike, type CaliberConfig } from '../config.js';
 import { samplePolicy } from '../samplePolicy.js';
 
+const DEPLOYED_POLICY_PATH = './config/testnet-policy.json';
+
 export function loadPolicy(c: CaliberConfig = config): TreasuryPolicy {
-  if (c.policy.path) return parsePolicy(readFileSync(c.policy.path, 'utf8'), c.policy.path);
-  if (c.policy.json) return parsePolicy(c.policy.json, 'CALIBER_POLICY_JSON');
   if (isProductionLike(c)) {
-    throw new Error('CALIBER_POLICY_JSON or CALIBER_POLICY_PATH is required in production/testnet');
+    return parsePolicy(readFileSync(DEPLOYED_POLICY_PATH, 'utf8'), DEPLOYED_POLICY_PATH);
   }
   return samplePolicy;
 }

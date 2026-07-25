@@ -1,6 +1,6 @@
 import type { TreasuryPolicy } from '@caliber/shared';
 
-/** Development-only fallback. Deployed modes must provide CALIBER_POLICY_JSON or CALIBER_POLICY_PATH. */
+/** Development-only fallback. Deployed modes load config/testnet-policy.json. */
 export const samplePolicy: TreasuryPolicy = {
   id: 'pol_demo',
   name: 'Conservative RWA Treasury',

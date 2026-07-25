@@ -55,7 +55,7 @@ pnpm --filter @caliber/services run:once   # single configured loop entry
 1. Deploy the vault contract (see `packages/contracts`) and set
    `CALIBER_VAULT_CONTRACT_HASH`.
 2. Provide a funded testnet key at `CASPER_SECRET_KEY_PATH`.
-3. Set `CALIBER_POLICY_PATH` or `CALIBER_POLICY_JSON` to the real treasury policy.
+3. Review `config/testnet-policy.json`; deployed modes load this policy directly.
 4. Set `CALIBER_SIGNAL_FEED_URL` to a live JSON feed that returns `Signal[]` or
    `{ "signals": Signal[] }`.
 5. Set Postgres via `CALIBER_DATABASE_URL` / `DATABASE_URL`, set

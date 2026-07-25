@@ -30,10 +30,6 @@ export interface CaliberConfig {
     timeoutMs: number;
     maxAgeMs: number;
   };
-  policy: {
-    json: string;
-    path: string;
-  };
   mcp: {
     casperUrl: string;
     required: boolean;
@@ -76,10 +72,6 @@ export function loadConfig(env: NodeJS.ProcessEnv): CaliberConfig {
       feedUrl: env.CALIBER_SIGNAL_FEED_URL ?? env.RWA_FEED_URL ?? '',
       timeoutMs: numberEnv(env.CALIBER_SIGNAL_FEED_TIMEOUT_MS, 10000),
       maxAgeMs: numberEnv(env.CALIBER_SIGNAL_MAX_AGE_MS, 300000),
-    },
-    policy: {
-      json: env.CALIBER_POLICY_JSON ?? '',
-      path: env.CALIBER_POLICY_PATH ?? defaultPolicyPath(runtimeEnv),
     },
     mcp: {
       casperUrl: env.CALIBER_CASPER_MCP_URL ?? '',
@@ -131,10 +123,6 @@ function normalizeNodeEnv(nodeEnv: string | undefined): RuntimeMode {
   return nodeEnv === 'production' ? 'production' : 'development';
 }
 
-function defaultPolicyPath(runtimeEnv: RuntimeMode | string): string {
-  return runtimeEnv === 'testnet' ? './config/testnet-policy.json' : '';
-}
-
 function numberEnv(value: string | undefined, fallback: number): number {
   if (value === undefined || value === '') return fallback;
   return Number(value);
@@ -178,9 +166,6 @@ export function validateRuntimeConfig(c: CaliberConfig = config): void {
 
   if (isProductionLike(c)) {
     if (!c.signals.feedUrl) errors.push('CALIBER_SIGNAL_FEED_URL is required in production/testnet');
-    if (!c.policy.json && !c.policy.path) {
-      errors.push('CALIBER_POLICY_JSON or CALIBER_POLICY_PATH is required in production/testnet');
-    }
     if (c.db.kind !== 'postgres') errors.push('Postgres DATABASE_URL/CALIBER_DATABASE_URL is required in production/testnet');
     if (!c.api.adminToken) errors.push('CALIBER_ADMIN_TOKEN is required in production/testnet');
     if (c.loop.dryRun) errors.push('CALIBER_DRY_RUN=false is required in production/testnet');

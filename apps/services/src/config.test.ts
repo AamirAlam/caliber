@@ -9,31 +9,6 @@ const baseEnv = {
   CALIBER_DRY_RUN: 'false',
   CALIBER_VAULT_CONTRACT_HASH: 'contract-package-test',
   CASPER_SECRET_KEY_PATH: './keys/agent_secret_key.pem',
-  CALIBER_POLICY_JSON: JSON.stringify({
-    id: 'pol_testnet',
-    name: 'Testnet Treasury',
-    version: 1,
-    owner: 'account-hash-test',
-    allocations: [
-      {
-        assetId: 'tbill-rwa',
-        label: 'Tokenized US T-Bills',
-        assetClass: 'rwa',
-        target: 0.6,
-        min: 0.5,
-        max: 0.7,
-      },
-    ],
-    constraints: {
-      maxSingleRebalancePct: 0.2,
-      minLiquidityBufferPct: 0.2,
-      maxRiskScore: 70,
-      requireHumanApproval: true,
-      allowedCounterparties: [],
-    },
-    paused: false,
-    updatedAt: '2026-07-20T00:00:00.000Z',
-  }),
 } satisfies NodeJS.ProcessEnv;
 
 describe('runtime config modes', () => {
@@ -58,19 +33,9 @@ describe('runtime config modes', () => {
     expect(() => validateRuntimeConfig(c)).not.toThrow();
   });
 
-  it('defaults testnet to the checked-in policy file', () => {
-    const c = loadConfig({
-      ...baseEnv,
-      CALIBER_POLICY_JSON: '',
-    });
-    expect(c.policy.path).toBe('./config/testnet-policy.json');
-    expect(() => validateRuntimeConfig(c)).not.toThrow();
-  });
-
   it('rejects deployed modes without production prerequisites', () => {
     const c = loadConfig({ CALIBER_ENV: 'production' });
     expect(() => validateRuntimeConfig(c)).toThrow(/CALIBER_SIGNAL_FEED_URL/);
-    expect(() => validateRuntimeConfig(c)).toThrow(/CALIBER_POLICY_JSON or CALIBER_POLICY_PATH/);
     expect(() => validateRuntimeConfig(c)).toThrow(/Postgres/);
     expect(() => validateRuntimeConfig(c)).toThrow(/CALIBER_ADMIN_TOKEN/);
     expect(() => validateRuntimeConfig(c)).toThrow(/CALIBER_DRY_RUN=false/);
