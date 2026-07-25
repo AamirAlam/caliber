@@ -2,6 +2,7 @@ import type {
   AgentRunLog,
   Recommendation,
   SignalSnapshot,
+  TreasuryWorkspace,
   TransactionRecord,
 } from '@caliber/shared';
 import type { DB } from '../db.js';
@@ -43,6 +44,14 @@ export class SqlAuditStore implements AuditStore {
   async deletePendingApproval(runId: string): Promise<void> {
     await this.db.deleteFrom('pending_approvals').where('run_id', '=', runId).execute();
   }
+  async saveWorkspace(workspace: TreasuryWorkspace): Promise<void> {
+    const data = JSON.stringify(workspace);
+    await this.db
+      .insertInto('workspaces')
+      .values({ id: workspace.id, created_at: workspace.createdAt, data })
+      .onConflict((oc) => oc.column('id').doUpdateSet({ created_at: workspace.createdAt, data }))
+      .execute();
+  }
 
   async listRuns(): Promise<AgentRunLog[]> {
     const rows = await this.db
@@ -52,8 +61,19 @@ export class SqlAuditStore implements AuditStore {
       .execute();
     return rows.map((r) => JSON.parse(r.data) as AgentRunLog);
   }
+  async listWorkspaces(): Promise<TreasuryWorkspace[]> {
+    const rows = await this.db
+      .selectFrom('workspaces')
+      .select('data')
+      .orderBy('created_at', 'desc')
+      .execute();
+    return rows.map((r) => JSON.parse(r.data) as TreasuryWorkspace);
+  }
   async getRun(id: string): Promise<AgentRunLog | undefined> {
     return this.getById('runs', id);
+  }
+  async getWorkspace(id: string): Promise<TreasuryWorkspace | undefined> {
+    return this.getById('workspaces', id);
   }
   async getSnapshot(id: string): Promise<SignalSnapshot | undefined> {
     return this.getById('snapshots', id);
@@ -87,7 +107,7 @@ export class SqlAuditStore implements AuditStore {
   }
 
   private async getById<T>(
-    table: 'runs' | 'snapshots' | 'recommendations' | 'transactions',
+    table: 'runs' | 'snapshots' | 'recommendations' | 'transactions' | 'workspaces',
     id: string,
   ): Promise<T | undefined> {
     const row = await this.db

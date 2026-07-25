@@ -27,10 +27,11 @@ async function forward(req: NextRequest, path: string[]): Promise<NextResponse> 
   headers.delete('content-length');
   headers.delete('accept-encoding');
   const mutation = req.method !== 'GET' && req.method !== 'HEAD';
-  if (mutation && !hasOperatorSession(req)) {
+  const publicMutation = req.method === 'POST' && path.join('/') === 'workspaces';
+  if (mutation && !publicMutation && !hasOperatorSession(req)) {
     return NextResponse.json({ error: 'operator access required' }, { status: 403 });
   }
-  if (process.env.CALIBER_ADMIN_TOKEN && mutation) {
+  if (process.env.CALIBER_ADMIN_TOKEN && mutation && !publicMutation) {
     headers.set('authorization', `Bearer ${process.env.CALIBER_ADMIN_TOKEN}`);
   }
 

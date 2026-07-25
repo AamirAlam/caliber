@@ -3,6 +3,8 @@ import type {
   Recommendation,
   RiskScore,
   SignalSnapshot,
+  CreateTreasuryWorkspace,
+  TreasuryWorkspace,
   TransactionRecord,
   TreasuryPolicy,
 } from '@caliber/shared';
@@ -52,6 +54,10 @@ export const api = {
   getRuns: () => get<AgentRunLog[]>('/runs'),
   getRun: (id: string) => get<RunDetail>(`/runs/${id}`),
   getVaultState: () => get<VaultState>('/vault/state'),
+  getWorkspaces: () => get<TreasuryWorkspace[]>('/workspaces'),
+  getWorkspace: (id: string) => get<TreasuryWorkspace>(`/workspaces/${id}`),
+  createWorkspace: (workspace: CreateTreasuryWorkspace) =>
+    post<TreasuryWorkspace>('/workspaces', workspace),
   runNow: () =>
     post<{
       snapshot: SignalSnapshot | null;

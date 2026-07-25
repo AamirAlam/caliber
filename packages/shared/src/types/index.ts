@@ -14,6 +14,8 @@ import type {
   TransactionRecordSchema,
   AgentRunStageSchema,
   AgentRunLogSchema,
+  TreasuryWorkspaceSchema,
+  CreateTreasuryWorkspaceSchema,
 } from '../schemas/index.js';
 
 export type AssetAllocation = z.infer<typeof AssetAllocationSchema>;
@@ -33,3 +35,6 @@ export type TraceStep = z.infer<typeof TraceStepSchema>;
 export type TransactionRecord = z.infer<typeof TransactionRecordSchema>;
 export type AgentRunStage = z.infer<typeof AgentRunStageSchema>;
 export type AgentRunLog = z.infer<typeof AgentRunLogSchema>;
+
+export type TreasuryWorkspace = z.infer<typeof TreasuryWorkspaceSchema>;
+export type CreateTreasuryWorkspace = z.infer<typeof CreateTreasuryWorkspaceSchema>;

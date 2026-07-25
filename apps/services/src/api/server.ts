@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import cors from '@fastify/cors';
+import { CreateTreasuryWorkspaceSchema, type TreasuryWorkspace } from '@caliber/shared';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { config } from '../config.js';
 import { readVaultState, readVaultStateCached } from '../casper/reader.js';
@@ -39,6 +41,7 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
       metrics: '/metrics',
       policy: '/policy',
       signalFeed: '/signals/feed',
+      workspaces: '/workspaces',
       runs: '/runs',
       vaultState: '/vault/state',
     },
@@ -173,6 +176,29 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
   });
   app.get('/policy', async () => state.activePolicy);
   app.get('/signals/feed', async () => buildOperatorSignalFeed());
+  app.get('/workspaces', async () => audit.listWorkspaces());
+
+  app.get<{ Params: { id: string } }>('/workspaces/:id', async (req, reply) => {
+    const workspace = await audit.getWorkspace(req.params.id);
+    if (!workspace) return reply.code(404).send({ error: 'workspace not found' });
+    return workspace;
+  });
+
+  app.post('/workspaces', async (req, reply) => {
+    const parsed = CreateTreasuryWorkspaceSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.message });
+    }
+    const now = new Date().toISOString();
+    const workspace: TreasuryWorkspace = {
+      ...parsed.data,
+      id: `workspace_${randomUUID().slice(0, 12)}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await audit.saveWorkspace(workspace);
+    return reply.code(201).send(workspace);
+  });
 
   app.get('/signals/latest', async (_req, reply) =>
     state.latestSnapshot ?? reply.code(404).send({ error: 'no snapshot yet' }),

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Kysely, SqliteDialect } from 'kysely';
 import BetterSqlite3 from 'better-sqlite3';
-import type { AgentRunLog, Recommendation } from '@caliber/shared';
+import type { AgentRunLog, Recommendation, TreasuryWorkspace } from '@caliber/shared';
 import type { Database, DB } from '../db.js';
 import { migrate } from '../db.js';
 import { SqlAuditStore } from './sql.js';
@@ -65,5 +65,31 @@ describe('SqlAuditStore (SQLite)', () => {
     await store.saveRecommendation(rec);
     const back = await store.getRecommendation('rec_1');
     expect(back?.trace?.[0]?.label).toBe('REBALANCE');
+  });
+
+  it('persists workspace records', async () => {
+    const store = await memoryStore();
+    const workspace: TreasuryWorkspace = {
+      id: 'workspace_1',
+      name: 'RWA Income Treasury',
+      ownerAccount: 'account-hash-test',
+      vaultContractHash: 'contract-package-test',
+      network: 'casper-test',
+      policy: {
+        rwaTarget: 60,
+        stableTarget: 30,
+        nativeTarget: 10,
+        maxRiskScore: 70,
+      },
+      signals: {
+        mode: 'operator',
+        feedUrl: '',
+      },
+      createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:00.000Z',
+    };
+    await store.saveWorkspace(workspace);
+    expect(await store.getWorkspace(workspace.id)).toMatchObject({ name: workspace.name });
+    expect(await store.listWorkspaces()).toHaveLength(1);
   });
 });

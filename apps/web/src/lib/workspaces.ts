@@ -1,23 +1,6 @@
-export type WorkspaceSourceMode = 'operator' | 'external';
+import type { TreasuryWorkspace } from '@caliber/shared';
 
-export interface TreasuryWorkspace {
-  id: string;
-  name: string;
-  ownerAccount: string;
-  vaultContractHash: string;
-  network: 'casper-test';
-  policy: {
-    rwaTarget: number;
-    stableTarget: number;
-    nativeTarget: number;
-    maxRiskScore: number;
-  };
-  signals: {
-    mode: WorkspaceSourceMode;
-    feedUrl: string;
-  };
-  createdAt: string;
-}
+export type { TreasuryWorkspace } from '@caliber/shared';
 
 const STORAGE_KEY = 'caliber.workspaces.v1';
 const ACTIVE_KEY = 'caliber.activeWorkspaceId.v1';
@@ -29,6 +12,10 @@ export function workspaceSlug(name: string): string {
     .replace(/^-|-$/g, '')
     .slice(0, 40);
   return `${base || 'treasury'}-${Date.now().toString(36)}`;
+}
+
+export function activateWorkspace(workspace: TreasuryWorkspace): void {
+  saveWorkspace(workspace);
 }
 
 export function saveWorkspace(workspace: TreasuryWorkspace): void {

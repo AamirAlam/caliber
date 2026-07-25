@@ -66,7 +66,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const workspaceId = new URLSearchParams(window.location.search).get('workspace');
-    setWorkspace(getWorkspace(workspaceId));
+    const localWorkspace = getWorkspace(workspaceId);
+    setWorkspace(localWorkspace);
+    if (workspaceId && !localWorkspace) {
+      void api.getWorkspace(workspaceId).then((remoteWorkspace) => {
+        if (remoteWorkspace) setWorkspace(remoteWorkspace);
+      });
+    }
     void fetch('/api/operator/session', { cache: 'no-store' })
       .then((res) => res.json())
       .then((body: { operator?: boolean }) => setOperator(Boolean(body.operator)))

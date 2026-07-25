@@ -15,6 +15,7 @@ export interface Database {
   recommendations: { id: string; data: string };
   transactions: { id: string; data: string };
   pending_approvals: { run_id: string; created_at: string; data: string };
+  workspaces: { id: string; created_at: string; data: string };
 }
 
 export type DB = Kysely<Database>;
@@ -54,4 +55,5 @@ export async function migrate(db: DB): Promise<void> {
   await sql`CREATE TABLE IF NOT EXISTS recommendations (id text primary key, data text not null)`.execute(db);
   await sql`CREATE TABLE IF NOT EXISTS transactions (id text primary key, data text not null)`.execute(db);
   await sql`CREATE TABLE IF NOT EXISTS pending_approvals (run_id text primary key, created_at text not null, data text not null)`.execute(db);
+  await sql`CREATE TABLE IF NOT EXISTS workspaces (id text primary key, created_at text not null, data text not null)`.execute(db);
 }

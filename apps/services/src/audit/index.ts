@@ -4,6 +4,7 @@ import type {
   Recommendation,
   RiskScore,
   SignalSnapshot,
+  TreasuryWorkspace,
   TransactionRecord,
 } from '@caliber/shared';
 import { config, isProductionLike } from '../config.js';
@@ -23,12 +24,15 @@ export interface AuditStore {
   saveRun(run: AgentRunLog): Promise<void>;
   savePendingApproval(pending: PendingApproval): Promise<void>;
   deletePendingApproval(runId: string): Promise<void>;
+  saveWorkspace(workspace: TreasuryWorkspace): Promise<void>;
   listRuns(): Promise<AgentRunLog[]>;
+  listWorkspaces(): Promise<TreasuryWorkspace[]>;
   getRun(id: string): Promise<AgentRunLog | undefined>;
   getSnapshot(id: string): Promise<SignalSnapshot | undefined>;
   getRecommendation(id: string): Promise<Recommendation | undefined>;
   getTransaction(id: string): Promise<TransactionRecord | undefined>;
   getPendingApproval(runId: string): Promise<PendingApproval | undefined>;
+  getWorkspace(id: string): Promise<TreasuryWorkspace | undefined>;
 }
 
 export interface PendingApproval {
@@ -48,6 +52,7 @@ export class InMemoryAuditStore implements AuditStore {
   private transactions = new Map<string, TransactionRecord>();
   private runs = new Map<string, AgentRunLog>();
   private pending = new Map<string, PendingApproval>();
+  private workspaces = new Map<string, TreasuryWorkspace>();
 
   async saveSnapshot(snapshot: SignalSnapshot): Promise<void> {
     this.snapshots.set(snapshot.id, snapshot);
@@ -67,8 +72,14 @@ export class InMemoryAuditStore implements AuditStore {
   async deletePendingApproval(runId: string): Promise<void> {
     this.pending.delete(runId);
   }
+  async saveWorkspace(workspace: TreasuryWorkspace): Promise<void> {
+    this.workspaces.set(workspace.id, { ...workspace });
+  }
   async listRuns(): Promise<AgentRunLog[]> {
     return [...this.runs.values()].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  }
+  async listWorkspaces(): Promise<TreasuryWorkspace[]> {
+    return [...this.workspaces.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
   async getRun(id: string): Promise<AgentRunLog | undefined> {
     return this.runs.get(id);
@@ -84,6 +95,9 @@ export class InMemoryAuditStore implements AuditStore {
   }
   async getPendingApproval(runId: string): Promise<PendingApproval | undefined> {
     return this.pending.get(runId);
+  }
+  async getWorkspace(id: string): Promise<TreasuryWorkspace | undefined> {
+    return this.workspaces.get(id);
   }
 }
 

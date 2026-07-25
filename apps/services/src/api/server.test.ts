@@ -87,6 +87,53 @@ describe('service observability API', () => {
     });
   });
 
+  it('creates and reads treasury workspaces', async () => {
+    const { app } = await testServer();
+    const payload = {
+      name: 'RWA Income Treasury',
+      ownerAccount: 'account-hash-test',
+      vaultContractHash: 'contract-package-test',
+      network: 'casper-test',
+      policy: {
+        rwaTarget: 60,
+        stableTarget: 30,
+        nativeTarget: 10,
+        maxRiskScore: 70,
+      },
+      signals: {
+        mode: 'operator',
+        feedUrl: '',
+      },
+    };
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      payload,
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toMatchObject({ name: payload.name, id: expect.stringMatching(/^workspace_/) });
+
+    const workspaceId = created.json().id as string;
+    const detail = await app.inject({ method: 'GET', url: `/workspaces/${workspaceId}` });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toMatchObject({ id: workspaceId, policy: { maxRiskScore: 70 } });
+
+    const list = await app.inject({ method: 'GET', url: '/workspaces' });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toHaveLength(1);
+  });
+
+  it('rejects invalid workspace payloads', async () => {
+    const { app } = await testServer();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/workspaces',
+      payload: { name: '' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it('exports metrics for runs, risk, pending approval, and deploy timing', async () => {
     const { app, audit, state } = await testServer();
     const tx: TransactionRecord = {

@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { CaliberMark } from '@/components/SiteHeader';
-import { saveWorkspace, workspaceSlug, type TreasuryWorkspace } from '@/lib/workspaces';
+import { api } from '@/lib/api';
+import { activateWorkspace, workspaceSlug, type TreasuryWorkspace } from '@/lib/workspaces';
 
 const steps = [
   'Workspace',
@@ -28,6 +29,8 @@ export default function OnboardingPage() {
   const [riskLimit, setRiskLimit] = useState(70);
   const [sourceMode, setSourceMode] = useState<SourceMode>('operator');
   const [feedUrl, setFeedUrl] = useState('');
+  const [activating, setActivating] = useState(false);
+  const [activationError, setActivationError] = useState<string | null>(null);
 
   const totalAllocation = stableTarget + rwaTarget + nativeTarget;
   const ready = workspace.trim().length > 2 && vault.trim().length > 12 && totalAllocation === 100;
@@ -42,11 +45,11 @@ export default function OnboardingPage() {
     [feedUrl, nativeTarget, riskLimit, rwaTarget, sourceMode, stableTarget, vault, workspace],
   );
 
-  const activateWorkspace = () => {
+  const onActivateWorkspace = async () => {
     if (!ready) return;
-    const id = workspaceSlug(workspace);
-    const record: TreasuryWorkspace = {
-      id,
+    setActivating(true);
+    setActivationError(null);
+    const payload = {
       name: workspace.trim(),
       ownerAccount: owner.trim(),
       vaultContractHash: vault.trim(),
@@ -61,10 +64,26 @@ export default function OnboardingPage() {
         mode: sourceMode,
         feedUrl: feedUrl.trim(),
       },
-      createdAt: new Date().toISOString(),
-    };
-    saveWorkspace(record);
-    router.push(`/dashboard?workspace=${encodeURIComponent(id)}`);
+    } as const;
+
+    try {
+      const created = await api.createWorkspace(payload);
+      activateWorkspace(created);
+      router.push(`/dashboard?workspace=${encodeURIComponent(created.id)}`);
+    } catch (error) {
+      const id = workspaceSlug(workspace);
+      const fallback: TreasuryWorkspace = {
+        ...payload,
+        id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      activateWorkspace(fallback);
+      setActivationError(`Workspace saved locally because the backend could not persist it: ${String(error)}`);
+      router.push(`/dashboard?workspace=${encodeURIComponent(id)}`);
+    } finally {
+      setActivating(false);
+    }
   };
 
   return (
@@ -196,12 +215,13 @@ export default function OnboardingPage() {
                   ))}
                 </div>
                 <button
-                  onClick={activateWorkspace}
-                  disabled={!ready}
+                  onClick={onActivateWorkspace}
+                  disabled={!ready || activating}
                   className="btn-primary mt-6 w-full disabled:opacity-40"
                 >
-                  Activate testnet workspace
+                  {activating ? 'Activating...' : 'Activate testnet workspace'}
                 </button>
+                {activationError && <p className="mt-2 text-sm text-signal-amber">{activationError}</p>}
               </SetupBlock>
             )}
           </div>
