@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { AGENT_ROLES } from '@caliber/shared';
 import type { Recommendation, RiskScore, SignalSnapshot, TraceStep, TreasuryPolicy } from '@caliber/shared';
 import { api, type VaultState } from '@/lib/api';
 import { PageLoader } from '@/components/Spinner';
 import { MaintenanceMode } from '@/components/MaintenanceMode';
+import { getWorkspace, type TreasuryWorkspace } from '@/lib/workspaces';
 
 const EXPLORER = process.env.NEXT_PUBLIC_EXPLORER_BASE ?? 'https://testnet.cspr.live';
 
@@ -18,6 +20,7 @@ const BANDS = {
 
 export default function DashboardPage() {
   const [policy, setPolicy] = useState<TreasuryPolicy | null>(null);
+  const [workspace, setWorkspace] = useState<TreasuryWorkspace | null>(null);
   const [snapshot, setSnapshot] = useState<SignalSnapshot | null>(null);
   const [risk, setRisk] = useState<RiskScore | null>(null);
   const [rec, setRec] = useState<Recommendation | null>(null);
@@ -62,6 +65,8 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    const workspaceId = new URLSearchParams(window.location.search).get('workspace');
+    setWorkspace(getWorkspace(workspaceId));
     void fetch('/api/operator/session', { cache: 'no-store' })
       .then((res) => res.json())
       .then((body: { operator?: boolean }) => setOperator(Boolean(body.operator)))
@@ -144,14 +149,20 @@ export default function DashboardPage() {
         ? 'Halted — review required'
         : 'Holding — within policy';
 
+  const workspaceTitle = workspace?.name ?? policy.name;
+  const workspacePolicy = workspace
+    ? `${workspace.policy.rwaTarget}% RWA / ${workspace.policy.stableTarget}% stable / ${workspace.policy.nativeTarget}% CSPR`
+    : 'Default testnet policy';
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 pb-28 sm:px-6 sm:py-8 lg:px-8 lg:py-10 lg:pb-10">
       <header className="flex items-center justify-between">
         <div>
           <p className="eyebrow">Treasury control plane</p>
           <h1 className="mt-1.5 text-[1.6rem] font-semibold tracking-tightish text-ink-900">
-            {policy.name}
+            {workspaceTitle}
           </h1>
+          <p className="mt-1 text-sm text-slate-500">{workspacePolicy}</p>
         </div>
         <span
           className={`pill ${live ? 'border-signal-emerald/30 bg-emerald-50 text-signal-emerald' : 'border-slate-200 bg-slate-50 text-slate-500'}`}
@@ -184,6 +195,33 @@ export default function DashboardPage() {
           )}
         </div>
       </section>
+
+      {!workspace && (
+        <section className="mt-4 rounded-xl border border-brand-100 bg-brand-50/60 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-ink-900">No workspace selected</p>
+              <p className="mt-0.5 text-sm text-slate-600">
+                You are viewing the shared testnet workspace. Create your own treasury setup to personalize policy and data-source context.
+              </p>
+            </div>
+            <Link href="/onboarding" className="btn-primary w-full sm:w-auto">
+              Create workspace
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {workspace && (
+        <section className="mt-4 grid gap-3 rounded-xl border border-slate-900/[0.07] bg-white p-4 shadow-sm sm:grid-cols-3">
+          <WorkspaceFact label="Owner" value={workspace.ownerAccount || 'Not connected'} />
+          <WorkspaceFact label="Vault" value={`${workspace.vaultContractHash.slice(0, 10)}...${workspace.vaultContractHash.slice(-8)}`} />
+          <WorkspaceFact
+            label="Signals"
+            value={workspace.signals.mode === 'operator' ? 'Built-in testnet feed' : workspace.signals.feedUrl || 'External feed'}
+          />
+        </section>
+      )}
 
       {unlockOpen && (
         <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50/50 p-4">
@@ -469,6 +507,15 @@ function RiskGauge({ score, band }: { score: number; band: RiskScore['band'] }) 
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{children}</h2>;
+}
+
+function WorkspaceFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 truncate text-sm font-medium text-slate-700">{value}</p>
+    </div>
+  );
 }
 
 function DeliberationStep({ role, ok, note }: { role: string; ok: boolean; note: string }) {

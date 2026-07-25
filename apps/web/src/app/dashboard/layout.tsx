@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 const nav = [
   { href: '/dashboard', label: 'Home', icon: 'grid' },
   { href: '/dashboard/runs', label: 'Runs', icon: 'list' },
+  { href: '/onboarding', label: 'New workspace', icon: 'plus' },
 ] as const;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -98,10 +99,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 }
 
-function NavIcon({ name }: { name: 'grid' | 'list' }) {
+function NavIcon({ name }: { name: 'grid' | 'list' | 'plus' }) {
   const p = {
     grid: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
     list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+    plus: 'M12 5v14M5 12h14',
   } as const;
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>

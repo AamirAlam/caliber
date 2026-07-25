@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { CaliberMark } from '@/components/SiteHeader';
+import { saveWorkspace, workspaceSlug, type TreasuryWorkspace } from '@/lib/workspaces';
 
 const steps = [
   'Workspace',
@@ -15,6 +17,7 @@ const steps = [
 type SourceMode = 'operator' | 'external';
 
 export default function OnboardingPage() {
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [workspace, setWorkspace] = useState('RWA Income Treasury');
   const [owner, setOwner] = useState('');
@@ -38,6 +41,31 @@ export default function OnboardingPage() {
     ],
     [feedUrl, nativeTarget, riskLimit, rwaTarget, sourceMode, stableTarget, vault, workspace],
   );
+
+  const activateWorkspace = () => {
+    if (!ready) return;
+    const id = workspaceSlug(workspace);
+    const record: TreasuryWorkspace = {
+      id,
+      name: workspace.trim(),
+      ownerAccount: owner.trim(),
+      vaultContractHash: vault.trim(),
+      network: 'casper-test',
+      policy: {
+        rwaTarget,
+        stableTarget,
+        nativeTarget,
+        maxRiskScore: riskLimit,
+      },
+      signals: {
+        mode: sourceMode,
+        feedUrl: feedUrl.trim(),
+      },
+      createdAt: new Date().toISOString(),
+    };
+    saveWorkspace(record);
+    router.push(`/dashboard?workspace=${encodeURIComponent(id)}`);
+  };
 
   return (
     <main className="min-h-screen bg-canvas">
@@ -167,12 +195,13 @@ export default function OnboardingPage() {
                     </div>
                   ))}
                 </div>
-                <Link
-                  href="/dashboard"
-                  className={`btn-primary mt-6 w-full ${ready ? '' : 'pointer-events-none opacity-40'}`}
+                <button
+                  onClick={activateWorkspace}
+                  disabled={!ready}
+                  className="btn-primary mt-6 w-full disabled:opacity-40"
                 >
                   Activate testnet workspace
-                </Link>
+                </button>
               </SetupBlock>
             )}
           </div>

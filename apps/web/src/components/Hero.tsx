@@ -22,8 +22,8 @@ export function Hero() {
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-          <Link href="/dashboard" className="btn-primary shadow-pop">
-            Open the dashboard
+          <Link href="/onboarding" className="btn-primary shadow-pop">
+            Create a treasury
           </Link>
           <a href="#how" className="btn-ghost">
             See how it works
