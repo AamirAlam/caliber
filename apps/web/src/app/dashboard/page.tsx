@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AGENT_ROLES } from '@caliber/shared';
-import type { Recommendation, RiskScore, SignalSnapshot, TraceStep, TreasuryPolicy } from '@caliber/shared';
+import type { AgentRunLog, Recommendation, RiskScore, SignalSnapshot, TraceStep, TreasuryPolicy } from '@caliber/shared';
 import { api, type FeedStatus, type VaultState } from '@/lib/api';
 import { PageLoader } from '@/components/Spinner';
 import { MaintenanceMode } from '@/components/MaintenanceMode';
@@ -21,6 +21,7 @@ import {
 import type { WalletSession } from '@/lib/walletAuth';
 
 const EXPLORER = process.env.NEXT_PUBLIC_EXPLORER_BASE ?? 'https://testnet.cspr.live';
+const TOTAL_FUNDS_UNDER_MANAGEMENT_USD = 1_200_000;
 
 const BANDS = {
   low: { label: 'Low', color: '#059669', tint: 'text-signal-emerald' },
@@ -35,9 +36,10 @@ export default function DashboardPage() {
   const [workspaceResolved, setWorkspaceResolved] = useState(false);
   const [snapshot, setSnapshot] = useState<SignalSnapshot | null>(null);
   const [risk, setRisk] = useState<RiskScore | null>(null);
-  const [rec, setRec] = useState<Recommendation | null>(null);
   const [vault, setVault] = useState<VaultState | null>(null);
   const [feedStatus, setFeedStatus] = useState<FeedStatus | null>(null);
+  const [workspaceRuns, setWorkspaceRuns] = useState<AgentRunLog[]>([]);
+  const [workspaceRecommendation, setWorkspaceRecommendation] = useState<Recommendation | null>(null);
   const [pendingRunId, setPendingRunId] = useState<string | null>(null);
   const [deployHash, setDeployHash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -51,11 +53,10 @@ export default function DashboardPage() {
   const [walletError, setWalletError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const [p, s, r, rc, v] = await Promise.all([
+    const [p, s, r, v] = await Promise.all([
       api.getPolicy(),
       api.getLatestSignals(),
       api.getLatestRisk(),
-      api.getLatestRecommendation(),
       api.getVaultState(),
     ]);
     if (p === null) {
@@ -64,7 +65,6 @@ export default function DashboardPage() {
       setPolicy(null);
       setSnapshot(null);
       setRisk(null);
-      setRec(null);
       setVault(null);
       setPendingRunId(null);
       return;
@@ -74,9 +74,31 @@ export default function DashboardPage() {
     setPolicy(p);
     if (s) setSnapshot(s);
     if (r) setRisk(r);
-    if (rc) setRec(rc);
     if (v) setVault(v);
   }, []);
+
+  useEffect(() => {
+    if (!workspace?.id) return;
+    let cancelled = false;
+    const refreshWorkspaceActivity = async () => {
+      const runs = (await api.getRuns(workspace.id)) ?? [];
+      if (cancelled) return;
+      setWorkspaceRuns(runs);
+      const latest = runs[0];
+      if (!latest) {
+        setWorkspaceRecommendation(null);
+        return;
+      }
+      const detail = await api.getRun(latest.id);
+      if (!cancelled) setWorkspaceRecommendation(detail?.recommendation ?? null);
+    };
+    void refreshWorkspaceActivity();
+    const interval = setInterval(() => void refreshWorkspaceActivity(), 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [workspace?.id]);
 
   useEffect(() => {
     const unsubscribeWallet = subscribeWalletPublicKey((publicKey) => {
@@ -162,6 +184,13 @@ export default function DashboardPage() {
       const res = await api.runNow(workspace?.id);
       setPendingRunId(res.pendingRunId);
       await refresh();
+      if (workspace?.id) {
+        const runs = (await api.getRuns(workspace.id)) ?? [];
+        setWorkspaceRuns(runs);
+        const latest = runs[0];
+        const detail = latest ? await api.getRun(latest.id) : null;
+        setWorkspaceRecommendation(detail?.recommendation ?? null);
+      }
     } catch (e) {
       setError(String(e));
     } finally {
@@ -170,7 +199,7 @@ export default function DashboardPage() {
   };
 
   const onApprove = async () => {
-    const runId = pendingRunId ?? (rec?.action === 'rebalance' ? rec.runId : null);
+    const runId = pendingRunId ?? (workspaceRecommendation?.action === 'rebalance' ? workspaceRecommendation.runId : null);
     if (!runId || !workspace || !wallet) return;
     setBusy(true);
     setError(null);
@@ -180,6 +209,11 @@ export default function DashboardPage() {
       setDeployHash(res.tx.deployHash ?? null);
       setPendingRunId(null);
       await refresh();
+      const runs = (await api.getRuns(workspace.id)) ?? [];
+      setWorkspaceRuns(runs);
+      const latest = runs[0];
+      const detail = latest ? await api.getRun(latest.id) : null;
+      setWorkspaceRecommendation(detail?.recommendation ?? null);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -218,11 +252,14 @@ export default function DashboardPage() {
 
   const walletOwnsWorkspace =
     wallet && (workspace.ownerAccount === wallet.accountHash || workspace.ownerAccount === wallet.publicKey);
-  const canApprove = live && Boolean(walletOwnsWorkspace) && rec?.action === 'rebalance';
+  const latestWorkspaceRun = workspaceRuns[0] ?? null;
+  const currentDecision = workspaceRecommendation;
+  const hasWorkspaceAnalysis = Boolean(latestWorkspaceRun);
+  const canApprove = live && Boolean(walletOwnsWorkspace) && currentDecision?.action === 'rebalance';
   const headline =
-    rec?.action === 'rebalance'
+    currentDecision?.action === 'rebalance'
       ? 'Rebalance recommended'
-      : rec?.action === 'halt'
+      : currentDecision?.action === 'halt'
         ? 'Halted — review required'
         : 'Holding — within policy';
 
@@ -232,6 +269,7 @@ export default function DashboardPage() {
   const workspaceSignalFeedUrl =
     workspace.signals.mode === 'operator' ? managedSignalFeedUrl() : workspace.signals.feedUrl || 'External feed';
   const signalFreshness = feedFreshness(feedStatus?.capturedAt ?? snapshot?.capturedAt);
+  const latestRunStarted = latestWorkspaceRun ? new Date(latestWorkspaceRun.startedAt).toLocaleString() : null;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 pb-28 sm:px-6 sm:py-8 lg:px-8 lg:py-10 lg:pb-10">
@@ -326,64 +364,92 @@ export default function DashboardPage() {
         <WorkspaceFact label="Feed URL" value={workspaceSignalFeedUrl} href={workspaceSignalFeedUrl} detail={signalFreshness.label} />
       </section>
 
-      {/* ── Decision hero: the single focal element ── */}
-      <section className="animate-in mt-6 overflow-hidden rounded-2xl border border-slate-900/[0.07] bg-white shadow-card">
-        <div className="grid gap-6 p-6 sm:grid-cols-[auto_1fr] sm:gap-8 sm:p-8">
-          <div className="flex items-center justify-center">
-            <RiskGauge score={risk?.score ?? 0} band={risk?.band ?? 'low'} />
-          </div>
-
-          <div className="min-w-0">
-            <p className={`text-sm font-semibold ${rec ? BANDS[risk?.band ?? 'low'].tint : 'text-slate-400'}`}>
-              {rec ? `Agent recommendation · ${rec.action.toUpperCase()}` : 'Waiting for first run'}
-            </p>
-            <h2 className="mt-1 text-2xl font-semibold tracking-tightish text-ink-900 sm:text-[1.75rem]">
-              {headline}
-            </h2>
-            <p className="mt-3 text-[0.97rem] leading-relaxed text-slate-600">
-              {rec?.explanation ?? 'Run the loop to generate a recommendation.'}
-            </p>
-
-            <div className="mt-5 flex flex-col gap-2.5 sm:flex-row sm:items-center">
-              {canApprove ? (
-                <button
-                  onClick={onApprove}
-                  disabled={busy}
-                  className="btn-primary w-full bg-signal-emerald shadow-pop hover:bg-emerald-700 disabled:opacity-40 sm:w-auto"
-                >
-                  {busy ? 'Submitting…' : 'Approve & settle on Casper →'}
-                </button>
-              ) : walletOwnsWorkspace ? (
-                <button
-                  onClick={onRunNow}
-                  disabled={busy || !live}
-                  className="btn-primary w-full shadow-pop disabled:opacity-40 sm:w-auto"
-                >
-                  {busy ? 'Running…' : 'Run agent cycle'}
-                </button>
-              ) : (
-                <button
-                  onClick={onConnectWallet}
-                  disabled={walletPermissionConfirmed && !walletHasPublicKeyInput}
-                  className="btn-primary w-full shadow-pop disabled:opacity-40 sm:w-auto"
-                >
-                  {walletPermissionConfirmed ? 'Use pasted public key' : 'Connect wallet'}
-                </button>
-              )}
-              {!walletOwnsWorkspace && rec?.action === 'rebalance' && (
-                <span className="text-sm text-slate-500">
-                  Rebalance approval requires the treasury owner wallet.
-                </span>
-              )}
+      <section className="mt-6 grid gap-4 lg:grid-cols-[1fr_1fr]">
+        <div className="panel p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="eyebrow">Step 1 · Policy</p>
+              <h2 className="mt-2 text-xl font-semibold text-ink-900">Current policy configuration</h2>
             </div>
+            <div className="rounded-lg bg-slate-50 px-3 py-2 text-right">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Funds under management</p>
+              <p className="tnum mt-0.5 text-lg font-semibold text-ink-900">
+                {formatUsd(TOTAL_FUNDS_UNDER_MANAGEMENT_USD)}
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <PolicyMetric label="RWA target" value={`${workspace.policy.rwaTarget}%`} />
+            <PolicyMetric label="Stable buffer" value={`${workspace.policy.stableTarget}%`} />
+            <PolicyMetric label="Native CSPR" value={`${workspace.policy.nativeTarget}%`} />
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            <PolicyMetric label="Risk ceiling" value={`${workspace.policy.maxRiskScore}/100`} />
+            <PolicyMetric label="Single rebalance cap" value={`${(policy.constraints.maxSingleRebalancePct * 100).toFixed(0)}%`} />
+          </div>
+        </div>
+
+        <div className="panel p-5">
+          <p className="eyebrow">Step 2 · Analysis</p>
+          <h2 className="mt-2 text-xl font-semibold text-ink-900">
+            {hasWorkspaceAnalysis ? 'Latest agent run' : 'No analysis run yet'}
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-slate-600">
+            {hasWorkspaceAnalysis
+              ? currentDecision?.explanation ?? latestWorkspaceRun?.notes ?? 'The latest run is still being processed.'
+              : 'This policy has been created, but the agent has not analyzed the treasury against live signals yet.'}
+          </p>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <PolicyMetric label="Run status" value={latestWorkspaceRun?.status ?? 'Not run'} />
+            <PolicyMetric label="Stage" value={latestWorkspaceRun?.stage ?? 'Pending'} />
+            <PolicyMetric label="Started" value={latestRunStarted ?? 'Pending'} />
+          </div>
+          {currentDecision && (
+            <div className="mt-5 grid gap-4 sm:grid-cols-[auto_1fr]">
+              <RiskGauge score={currentDecision.riskScore} band={risk?.band ?? 'low'} />
+              <div className="min-w-0">
+                <p className={`text-sm font-semibold ${BANDS[risk?.band ?? 'low'].tint}`}>
+                  Decision · {currentDecision.action.toUpperCase()}
+                </p>
+                <dl className="mt-3 space-y-1.5 text-sm">
+                  <Row k="Compliance" v={currentDecision.compliancePassed ? 'Passing' : 'Blocked'} good={currentDecision.compliancePassed} />
+                  <Row k="Confidence" v={`${(currentDecision.confidence * 100).toFixed(0)}%`} />
+                  <Row k="Run ID" v={currentDecision.runId} />
+                </dl>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="mt-4 overflow-hidden rounded-xl border border-slate-900/[0.07] bg-white shadow-sm">
+        <div className="grid gap-6 p-5 lg:grid-cols-[1fr_360px]">
+          <div>
+            <p className="eyebrow">Step 3 · Action pane</p>
+            <h2 className="mt-2 text-xl font-semibold text-ink-900">
+              {currentDecision ? headline : 'No recommended action yet'}
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              {currentDecision
+                ? currentDecision.explanation
+                : 'Run an agent cycle to collect signals, score risk, evaluate policy, and produce a decision. Caliber will not ask for an on-chain action before that analysis exists.'}
+            </p>
+
+            {currentDecision?.violations.length ? (
+              <ul className="mt-4 space-y-1 text-sm text-signal-amber">
+                {currentDecision.violations.map((v, i) => (
+                  <li key={i}>{v.detail}</li>
+                ))}
+              </ul>
+            ) : null}
 
             {error && (
-              <p className="mt-3 rounded-lg border border-signal-rose/20 bg-rose-50 px-3 py-2 text-sm text-signal-rose">
+              <p className="mt-4 rounded-lg border border-signal-rose/20 bg-rose-50 px-3 py-2 text-sm text-signal-rose">
                 {error}
               </p>
             )}
             {deployHash && (
-              <p className="mt-3 rounded-lg border border-signal-emerald/20 bg-emerald-50 px-3 py-2 text-sm text-slate-700">
+              <p className="mt-4 rounded-lg border border-signal-emerald/20 bg-emerald-50 px-3 py-2 text-sm text-slate-700">
                 Settled on-chain:{' '}
                 <a
                   href={`${EXPLORER}/transaction/${deployHash}`}
@@ -395,6 +461,53 @@ export default function DashboardPage() {
                 </a>
               </p>
             )}
+          </div>
+
+          <div className="rounded-xl border border-slate-900/[0.07] bg-slate-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Available action</p>
+            {canApprove ? (
+              <>
+                <p className="mt-2 text-sm text-slate-600">A policy-compliant rebalance is waiting for owner approval.</p>
+                <button
+                  onClick={onApprove}
+                  disabled={busy}
+                  className="btn-primary mt-4 w-full bg-signal-emerald shadow-pop hover:bg-emerald-700 disabled:opacity-40"
+                >
+                  {busy ? 'Submitting…' : 'Approve & settle on Casper'}
+                </button>
+              </>
+            ) : walletOwnsWorkspace ? (
+              <>
+                <p className="mt-2 text-sm text-slate-600">
+                  {currentDecision
+                    ? 'Run another analysis cycle when you want the agent to evaluate fresh signals.'
+                    : 'Start the first analysis cycle for this policy.'}
+                </p>
+                <button
+                  onClick={onRunNow}
+                  disabled={busy || !live}
+                  className="btn-primary mt-4 w-full shadow-pop disabled:opacity-40"
+                >
+                  {busy ? 'Running…' : hasWorkspaceAnalysis ? 'Run new analysis' : 'Run first analysis'}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 text-sm text-slate-600">Connect the treasury owner wallet to run analysis or approve actions.</p>
+                <button
+                  onClick={onConnectWallet}
+                  disabled={walletPermissionConfirmed && !walletHasPublicKeyInput}
+                  className="btn-primary mt-4 w-full shadow-pop disabled:opacity-40"
+                >
+                  {walletPermissionConfirmed ? 'Use pasted public key' : 'Connect wallet'}
+                </button>
+              </>
+            )}
+            {!walletOwnsWorkspace && currentDecision?.action === 'rebalance' && (
+              <p className="mt-3 text-xs text-slate-500">
+                Rebalance approval requires the treasury owner wallet.
+              </p>
+            )}
             {!live && (
               <p className="mt-3 text-xs text-slate-500">
                 Configure and start the services API to stream live treasury signals.
@@ -403,10 +516,10 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {rec && (
-          <div className="border-t border-slate-900/[0.06] px-6 py-4 sm:px-8">
+        {currentDecision && (
+          <div className="border-t border-slate-900/[0.06] px-5 py-4">
             <button onClick={() => setShowReasoning((v) => !v)} className="disclosure-btn">
-              {showReasoning ? 'Hide reasoning' : 'Show reasoning'}
+              {showReasoning ? 'Hide reasoning' : 'Show reasoning and trace'}
               <Chevron open={showReasoning} />
             </button>
             {showReasoning && (
@@ -434,44 +547,25 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Policy check
-                  </p>
-                  <dl className="space-y-1.5 text-sm">
-                    <Row k="Compliance" v={rec.compliancePassed ? 'Passing' : 'Blocked'} good={rec.compliancePassed} />
-                    <Row k="Confidence" v={`${(rec.confidence * 100).toFixed(0)}%`} />
-                    <Row k="On-chain rebalances" v={String(vault?.rebalanceCount ?? '—')} />
-                  </dl>
-                  {rec.violations.length > 0 && (
-                    <ul className="mt-3 space-y-1 text-xs text-signal-amber">
-                      {rec.violations.map((v, i) => (
-                        <li key={i}>• {v.detail}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                {/* Multi-agent deliberation */}
-                <div className="sm:col-span-2">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                     Agent deliberation
                   </p>
-                  <div className="grid gap-2.5 sm:grid-cols-2">
+                  <div className="grid gap-2.5">
                     <DeliberationStep
                       role={AGENT_ROLES.proposer.name}
                       ok
                       note={
-                        rec.agentProposed
+                        currentDecision.agentProposed
                           ? 'Designed the move and tested it against policy.'
-                          : 'Deterministic engine (no LLM key configured).'
+                          : 'Deterministic engine produced the decision.'
                       }
                     />
                     <DeliberationStep
                       role={AGENT_ROLES.reviewer.name}
-                      ok={rec.review ? rec.review.approved : true}
+                      ok={currentDecision.review ? currentDecision.review.approved : true}
                       note={
-                        rec.review
-                          ? `${rec.review.approved ? 'Approved' : 'Vetoed'} · ${rec.review.severity} — ${rec.review.concern}`
-                          : rec.action === 'rebalance'
+                        currentDecision.review
+                          ? `${currentDecision.review.approved ? 'Approved' : 'Vetoed'} · ${currentDecision.review.severity} — ${currentDecision.review.concern}`
+                          : currentDecision.action === 'rebalance'
                             ? 'Signed off on the rebalance.'
                             : 'No rebalance to review.'
                       }
@@ -484,25 +578,25 @@ export default function DashboardPage() {
                     Execution boundary
                   </p>
                   <div className="grid gap-2.5 sm:grid-cols-3">
-                    <BoundaryItem label="AI role" value="Propose and explain" />
+                    <BoundaryItem label="AI role" value="Analyze and recommend" />
                     <BoundaryItem
                       label="Hard gate"
-                      value={rec.compliancePassed ? 'Policy passed' : 'Policy blocked'}
-                      ok={rec.compliancePassed}
+                      value={currentDecision.compliancePassed ? 'Policy passed' : 'Policy blocked'}
+                      ok={currentDecision.compliancePassed}
                     />
                     <BoundaryItem
                       label="Settlement"
-                      value={rec.action === 'rebalance' ? 'Human approval required' : 'No deploy prepared'}
+                      value={currentDecision.action === 'rebalance' ? 'Human approval required' : 'No deploy prepared'}
                     />
                   </div>
                 </div>
 
-                {rec.trace.length > 0 && (
+                {currentDecision.trace.length > 0 && (
                   <div className="sm:col-span-2">
                     <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Tool and decision trace
                     </p>
-                    <TraceTimeline trace={rec.trace} />
+                    <TraceTimeline trace={currentDecision.trace} />
                   </div>
                 )}
               </div>
@@ -627,6 +721,23 @@ function WorkspaceFact({
       {detail && <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>}
     </div>
   );
+}
+
+function PolicyMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-slate-900/[0.06] bg-white px-3 py-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-ink-900">{value}</p>
+    </div>
+  );
+}
+
+function formatUsd(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 function DeliberationStep({ role, ok, note }: { role: string; ok: boolean; note: string }) {
