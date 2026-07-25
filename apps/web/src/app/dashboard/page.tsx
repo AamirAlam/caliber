@@ -350,99 +350,189 @@ export default function DashboardPage() {
         )}
       </section>
 
-      <section className="mt-4 grid gap-3 rounded-xl border border-slate-900/[0.07] bg-white p-4 shadow-sm sm:grid-cols-4">
-        <WorkspaceFact label="Owner" value={workspace.ownerAccount || 'Not connected'} />
-        <WorkspaceFact label="Vault" value={`${workspace.vaultContractHash.slice(0, 10)}...${workspace.vaultContractHash.slice(-8)}`} />
-        <WorkspaceFact
-          label="Signals"
-          value={workspace.signals.mode === 'operator' ? 'Self managed feed' : 'External feed'}
+      <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <DashboardStat label="Funds under management" value={formatUsd(TOTAL_FUNDS_UNDER_MANAGEMENT_USD)} />
+        <DashboardStat label="Risk ceiling" value={`${workspace.policy.maxRiskScore}/100`} />
+        <DashboardStat
+          label="Feed"
+          value={workspace.signals.mode === 'operator' ? 'Self managed' : 'External'}
           status={{
             label: signalFreshness.status,
             tone: signalFreshness.active ? 'active' : 'inactive',
           }}
         />
-        <WorkspaceFact label="Feed URL" value={workspaceSignalFeedUrl} href={workspaceSignalFeedUrl} detail={signalFreshness.label} />
+        <DashboardStat label="Vault activity" value={`${vault?.rebalanceCount ?? 0} rebalances`} />
       </section>
 
-      <section className="mt-6 grid gap-4 lg:grid-cols-[1fr_1fr]">
-        <div className="panel p-5">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="eyebrow">Step 1 · Policy</p>
-              <h2 className="mt-2 text-xl font-semibold text-ink-900">Current policy configuration</h2>
-            </div>
-            <div className="rounded-lg bg-slate-50 px-3 py-2 text-right">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Funds under management</p>
-              <p className="tnum mt-0.5 text-lg font-semibold text-ink-900">
-                {formatUsd(TOTAL_FUNDS_UNDER_MANAGEMENT_USD)}
-              </p>
-            </div>
-          </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <PolicyMetric label="RWA target" value={`${workspace.policy.rwaTarget}%`} />
-            <PolicyMetric label="Stable buffer" value={`${workspace.policy.stableTarget}%`} />
-            <PolicyMetric label="Native CSPR" value={`${workspace.policy.nativeTarget}%`} />
-          </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <PolicyMetric label="Risk ceiling" value={`${workspace.policy.maxRiskScore}/100`} />
-            <PolicyMetric label="Single rebalance cap" value={`${(policy.constraints.maxSingleRebalancePct * 100).toFixed(0)}%`} />
-          </div>
-        </div>
-
-        <div className="panel p-5">
-          <p className="eyebrow">Step 2 · Analysis</p>
-          <h2 className="mt-2 text-xl font-semibold text-ink-900">
-            {hasWorkspaceAnalysis ? 'Latest agent run' : 'No analysis run yet'}
-          </h2>
-          <p className="mt-2 text-sm leading-relaxed text-slate-600">
-            {hasWorkspaceAnalysis
-              ? currentDecision?.explanation ?? latestWorkspaceRun?.notes ?? 'The latest run is still being processed.'
-              : 'This policy has been created, but the agent has not analyzed the treasury against live signals yet.'}
-          </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <PolicyMetric label="Run status" value={latestWorkspaceRun?.status ?? 'Not run'} />
-            <PolicyMetric label="Stage" value={latestWorkspaceRun?.stage ?? 'Pending'} />
-            <PolicyMetric label="Started" value={latestRunStarted ?? 'Pending'} />
-          </div>
-          {currentDecision && (
-            <div className="mt-5 grid gap-4 sm:grid-cols-[auto_1fr]">
-              <RiskGauge score={currentDecision.riskScore} band={risk?.band ?? 'low'} />
-              <div className="min-w-0">
-                <p className={`text-sm font-semibold ${BANDS[risk?.band ?? 'low'].tint}`}>
-                  Decision · {currentDecision.action.toUpperCase()}
+      <section className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid gap-5">
+          <section className="panel p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="eyebrow">Agent analysis</p>
+                <h2 className="mt-2 text-xl font-semibold text-ink-900">
+                  {hasWorkspaceAnalysis ? headline : 'Waiting for first analysis'}
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
+                  {currentDecision
+                    ? currentDecision.explanation
+                    : 'The treasury policy is active. Run the agent when you want Caliber to collect live signals, score risk, and produce a decision for this workspace.'}
                 </p>
-                <dl className="mt-3 space-y-1.5 text-sm">
-                  <Row k="Compliance" v={currentDecision.compliancePassed ? 'Passing' : 'Blocked'} good={currentDecision.compliancePassed} />
-                  <Row k="Confidence" v={`${(currentDecision.confidence * 100).toFixed(0)}%`} />
-                  <Row k="Run ID" v={currentDecision.runId} />
-                </dl>
+              </div>
+              {currentDecision ? (
+                <RiskGauge score={currentDecision.riskScore} band={risk?.band ?? 'low'} />
+              ) : (
+                <div className="flex h-[112px] w-[112px] shrink-0 items-center justify-center rounded-full border border-dashed border-slate-300 bg-slate-50 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  No run
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <PolicyMetric label="Run status" value={latestWorkspaceRun?.status ?? 'Not run'} />
+              <PolicyMetric label="Decision" value={currentDecision?.action ?? 'None'} />
+              <PolicyMetric label="Last run" value={latestRunStarted ?? 'Pending'} />
+            </div>
+
+            {currentDecision && (
+              <div className="mt-5 border-t border-slate-900/[0.06] pt-4">
+                <button onClick={() => setShowReasoning((v) => !v)} className="disclosure-btn">
+                  {showReasoning ? 'Hide analysis trace' : 'View analysis trace'}
+                  <Chevron open={showReasoning} />
+                </button>
+                {showReasoning && (
+                  <div className="disclosure-panel mt-4 grid gap-5 sm:grid-cols-2">
+                    <div>
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Risk factors
+                      </p>
+                      <div className="space-y-2.5">
+                        {(risk?.factors ?? []).map((f) => (
+                          <div key={f.key}>
+                            <div className="flex justify-between text-xs text-slate-500">
+                              <span>{f.label}</span>
+                              <span className="tnum">{f.contribution}</span>
+                            </div>
+                            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className="h-full rounded-full bg-brand-500"
+                                style={{ width: `${Math.min(100, f.contribution)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Agent review
+                      </p>
+                      <div className="grid gap-2.5">
+                        <DeliberationStep
+                          role={AGENT_ROLES.proposer.name}
+                          ok
+                          note={
+                            currentDecision.agentProposed
+                              ? 'Designed the move and tested it against policy.'
+                              : 'Deterministic engine produced the decision.'
+                          }
+                        />
+                        <DeliberationStep
+                          role={AGENT_ROLES.reviewer.name}
+                          ok={currentDecision.review ? currentDecision.review.approved : true}
+                          note={
+                            currentDecision.review
+                              ? `${currentDecision.review.approved ? 'Approved' : 'Vetoed'} · ${currentDecision.review.severity} — ${currentDecision.review.concern}`
+                              : currentDecision.action === 'rebalance'
+                                ? 'Signed off on the rebalance.'
+                                : 'No rebalance to review.'
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        Decision trace
+                      </p>
+                      {currentDecision.trace.length > 0 ? (
+                        <TraceTimeline trace={currentDecision.trace} />
+                      ) : (
+                        <p className="text-sm text-slate-500">No trace entries recorded for this run.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
+          <section className="panel p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="eyebrow">Policy</p>
+                <h2 className="mt-2 text-lg font-semibold text-ink-900">Allocation guardrails</h2>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">
+                  The agent can recommend actions, but execution is constrained by these policy limits.
+                </p>
+              </div>
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-right">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Single move cap</p>
+                <p className="tnum mt-0.5 text-lg font-semibold text-ink-900">
+                  {(policy.constraints.maxSingleRebalancePct * 100).toFixed(0)}%
+                </p>
               </div>
             </div>
-          )}
+            <div className="mt-5 grid gap-3">
+              <AllocationGuardrail label="RWA target" value={workspace.policy.rwaTarget} />
+              <AllocationGuardrail label="Stable buffer" value={workspace.policy.stableTarget} />
+              <AllocationGuardrail label="Native CSPR" value={workspace.policy.nativeTarget} />
+            </div>
+          </section>
         </div>
-      </section>
 
-      <section className="mt-4 overflow-hidden rounded-xl border border-slate-900/[0.07] bg-white shadow-sm">
-        <div className="grid gap-6 p-5 lg:grid-cols-[1fr_360px]">
-          <div>
-            <p className="eyebrow">Step 3 · Action pane</p>
-            <h2 className="mt-2 text-xl font-semibold text-ink-900">
-              {currentDecision ? headline : 'No recommended action yet'}
+        <aside className="grid h-fit gap-5">
+          <section className="panel p-5">
+            <p className="eyebrow">Action</p>
+            <h2 className="mt-2 text-lg font-semibold text-ink-900">
+              {currentDecision ? headline : 'No action pending'}
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
               {currentDecision
-                ? currentDecision.explanation
-                : 'Run an agent cycle to collect signals, score risk, evaluate policy, and produce a decision. Caliber will not ask for an on-chain action before that analysis exists.'}
+                ? currentDecision.action === 'rebalance'
+                  ? 'Review the recommendation and approve only when you are ready to submit on-chain.'
+                  : 'No on-chain approval is required for the latest decision.'
+                : 'No recommendation will appear here until an agent analysis has completed.'}
             </p>
-
-            {currentDecision?.violations.length ? (
-              <ul className="mt-4 space-y-1 text-sm text-signal-amber">
-                {currentDecision.violations.map((v, i) => (
-                  <li key={i}>{v.detail}</li>
-                ))}
-              </ul>
-            ) : null}
-
+            {canApprove ? (
+              <button
+                onClick={onApprove}
+                disabled={busy}
+                className="btn-primary mt-5 w-full bg-signal-emerald shadow-pop hover:bg-emerald-700 disabled:opacity-40"
+              >
+                {busy ? 'Submitting…' : 'Approve & settle on Casper'}
+              </button>
+            ) : walletOwnsWorkspace ? (
+              <button
+                onClick={onRunNow}
+                disabled={busy || !live}
+                className="btn-primary mt-5 w-full shadow-pop disabled:opacity-40"
+              >
+                {busy ? 'Running…' : hasWorkspaceAnalysis ? 'Run new analysis' : 'Run analysis'}
+              </button>
+            ) : (
+              <button
+                onClick={onConnectWallet}
+                disabled={walletPermissionConfirmed && !walletHasPublicKeyInput}
+                className="btn-primary mt-5 w-full shadow-pop disabled:opacity-40"
+              >
+                {walletPermissionConfirmed ? 'Use pasted public key' : 'Connect wallet'}
+              </button>
+            )}
+            {!walletOwnsWorkspace && currentDecision?.action === 'rebalance' && (
+              <p className="mt-3 text-xs text-slate-500">
+                Rebalance approval requires the treasury owner wallet.
+              </p>
+            )}
             {error && (
               <p className="mt-4 rounded-lg border border-signal-rose/20 bg-rose-50 px-3 py-2 text-sm text-signal-rose">
                 {error}
@@ -450,7 +540,7 @@ export default function DashboardPage() {
             )}
             {deployHash && (
               <p className="mt-4 rounded-lg border border-signal-emerald/20 bg-emerald-50 px-3 py-2 text-sm text-slate-700">
-                Settled on-chain:{' '}
+                Settled:{' '}
                 <a
                   href={`${EXPLORER}/transaction/${deployHash}`}
                   target="_blank"
@@ -461,182 +551,41 @@ export default function DashboardPage() {
                 </a>
               </p>
             )}
-          </div>
+          </section>
 
-          <div className="rounded-xl border border-slate-900/[0.07] bg-slate-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Available action</p>
-            {canApprove ? (
-              <>
-                <p className="mt-2 text-sm text-slate-600">A policy-compliant rebalance is waiting for owner approval.</p>
-                <button
-                  onClick={onApprove}
-                  disabled={busy}
-                  className="btn-primary mt-4 w-full bg-signal-emerald shadow-pop hover:bg-emerald-700 disabled:opacity-40"
-                >
-                  {busy ? 'Submitting…' : 'Approve & settle on Casper'}
-                </button>
-              </>
-            ) : walletOwnsWorkspace ? (
-              <>
-                <p className="mt-2 text-sm text-slate-600">
-                  {currentDecision
-                    ? 'Run another analysis cycle when you want the agent to evaluate fresh signals.'
-                    : 'Start the first analysis cycle for this policy.'}
-                </p>
-                <button
-                  onClick={onRunNow}
-                  disabled={busy || !live}
-                  className="btn-primary mt-4 w-full shadow-pop disabled:opacity-40"
-                >
-                  {busy ? 'Running…' : hasWorkspaceAnalysis ? 'Run new analysis' : 'Run first analysis'}
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="mt-2 text-sm text-slate-600">Connect the treasury owner wallet to run analysis or approve actions.</p>
-                <button
-                  onClick={onConnectWallet}
-                  disabled={walletPermissionConfirmed && !walletHasPublicKeyInput}
-                  className="btn-primary mt-4 w-full shadow-pop disabled:opacity-40"
-                >
-                  {walletPermissionConfirmed ? 'Use pasted public key' : 'Connect wallet'}
-                </button>
-              </>
-            )}
-            {!walletOwnsWorkspace && currentDecision?.action === 'rebalance' && (
-              <p className="mt-3 text-xs text-slate-500">
-                Rebalance approval requires the treasury owner wallet.
-              </p>
-            )}
-            {!live && (
-              <p className="mt-3 text-xs text-slate-500">
-                Configure and start the services API to stream live treasury signals.
-              </p>
-            )}
-          </div>
-        </div>
-
-        {currentDecision && (
-          <div className="border-t border-slate-900/[0.06] px-5 py-4">
-            <button onClick={() => setShowReasoning((v) => !v)} className="disclosure-btn">
-              {showReasoning ? 'Hide reasoning' : 'Show reasoning and trace'}
-              <Chevron open={showReasoning} />
-            </button>
-            {showReasoning && (
-              <div className="disclosure-panel mt-4 grid gap-6 sm:grid-cols-2">
-                <div>
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Risk factors
-                  </p>
-                  <div className="space-y-2.5">
-                    {(risk?.factors ?? []).map((f) => (
-                      <div key={f.key}>
-                        <div className="flex justify-between text-xs text-slate-500">
-                          <span>{f.label}</span>
-                          <span className="tnum">{f.contribution}</span>
-                        </div>
-                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className="h-full rounded-full bg-brand-500"
-                            style={{ width: `${Math.min(100, f.contribution)}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Agent deliberation
-                  </p>
-                  <div className="grid gap-2.5">
-                    <DeliberationStep
-                      role={AGENT_ROLES.proposer.name}
-                      ok
-                      note={
-                        currentDecision.agentProposed
-                          ? 'Designed the move and tested it against policy.'
-                          : 'Deterministic engine produced the decision.'
-                      }
-                    />
-                    <DeliberationStep
-                      role={AGENT_ROLES.reviewer.name}
-                      ok={currentDecision.review ? currentDecision.review.approved : true}
-                      note={
-                        currentDecision.review
-                          ? `${currentDecision.review.approved ? 'Approved' : 'Vetoed'} · ${currentDecision.review.severity} — ${currentDecision.review.concern}`
-                          : currentDecision.action === 'rebalance'
-                            ? 'Signed off on the rebalance.'
-                            : 'No rebalance to review.'
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                    Execution boundary
-                  </p>
-                  <div className="grid gap-2.5 sm:grid-cols-3">
-                    <BoundaryItem label="AI role" value="Analyze and recommend" />
-                    <BoundaryItem
-                      label="Hard gate"
-                      value={currentDecision.compliancePassed ? 'Policy passed' : 'Policy blocked'}
-                      ok={currentDecision.compliancePassed}
-                    />
-                    <BoundaryItem
-                      label="Settlement"
-                      value={currentDecision.action === 'rebalance' ? 'Human approval required' : 'No deploy prepared'}
-                    />
-                  </div>
-                </div>
-
-                {currentDecision.trace.length > 0 && (
-                  <div className="sm:col-span-2">
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Tool and decision trace
-                    </p>
-                    <TraceTimeline trace={currentDecision.trace} />
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* Signals */}
-      <section id="signals" className="mt-8 scroll-mt-20">
-        <SectionTitle>Live signals</SectionTitle>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {(snapshot?.signals ?? []).map((s) => (
-            <div key={s.key} className="panel p-5">
-              <p className="text-sm text-slate-500">{s.label}</p>
-              <p className="mt-1.5 tnum text-2xl font-semibold text-ink-900">
-                {s.value.toLocaleString()}
-                <span className="ml-1.5 text-xs font-normal text-slate-400">{s.unit}</span>
-              </p>
+          <section className="panel p-5">
+            <p className="eyebrow">Signal feed</p>
+            <div className="mt-3 flex items-center gap-2 text-sm font-semibold text-ink-900">
+              <span className={`h-2 w-2 rounded-full ${signalFreshness.active ? 'bg-signal-emerald' : 'bg-slate-300'}`} />
+              {signalFreshness.status}
             </div>
-          ))}
-        </div>
-      </section>
+            <a
+              href={workspaceSignalFeedUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 block break-all font-mono text-xs font-medium text-brand-600 hover:text-brand-700"
+            >
+              {workspaceSignalFeedUrl}
+            </a>
+            <p className="mt-2 text-xs text-slate-500">{signalFreshness.label}</p>
+          </section>
 
-      {/* Policy */}
-      <section id="policy" className="mt-8 scroll-mt-20">
-        <SectionTitle>Policy allocations</SectionTitle>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {policy.allocations.map((a) => (
-            <div key={a.assetId} className="panel p-5">
-              <p className="text-sm font-semibold text-ink-900">{a.label}</p>
-              <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                <div className="h-full rounded-full bg-brand-500" style={{ width: `${a.target * 100}%` }} />
+          {snapshot?.signals?.length ? (
+            <section className="panel p-5">
+              <p className="eyebrow">Latest signals</p>
+              <div className="mt-3 grid gap-3">
+                {snapshot.signals.slice(0, 3).map((s) => (
+                  <div key={s.key} className="flex items-center justify-between gap-3">
+                    <span className="truncate text-sm text-slate-500">{s.label}</span>
+                    <span className="tnum shrink-0 text-sm font-semibold text-ink-900">
+                      {s.value.toLocaleString()} <span className="text-xs font-normal text-slate-400">{s.unit}</span>
+                    </span>
+                  </div>
+                ))}
               </div>
-              <p className="mt-2 font-mono text-xs text-slate-500">
-                target {(a.target * 100).toFixed(0)}% · band {(a.min * 100).toFixed(0)}–{(a.max * 100).toFixed(0)}%
-              </p>
-            </div>
-          ))}
-        </div>
+            </section>
+          ) : null}
+        </aside>
       </section>
     </div>
   );
@@ -680,45 +629,25 @@ function RiskGauge({ score, band }: { score: number; band: RiskScore['band'] }) 
   );
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{children}</h2>;
-}
-
-function WorkspaceFact({
+function DashboardStat({
   label,
   value,
-  href,
-  detail,
   status,
 }: {
   label: string;
   value: string;
-  href?: string;
-  detail?: string;
   status?: { label: string; tone: 'active' | 'inactive' };
 }) {
   return (
-    <div className="min-w-0">
+    <div className="rounded-xl border border-slate-900/[0.07] bg-white p-4 shadow-sm">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-      {href ? (
-        <a
-          href={href}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-1 block truncate text-sm font-medium text-brand-600 hover:text-brand-700"
-        >
-          {value}
-        </a>
-      ) : (
-        <p className="mt-1 truncate text-sm font-medium text-slate-700">{value}</p>
-      )}
+      <p className="mt-1 tnum truncate text-lg font-semibold text-ink-900">{value}</p>
       {status && (
-        <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
           <span className={`h-2 w-2 rounded-full ${status.tone === 'active' ? 'bg-signal-emerald' : 'bg-slate-300'}`} />
           {status.label}
         </p>
       )}
-      {detail && <p className="mt-1 truncate text-xs text-slate-500">{detail}</p>}
     </div>
   );
 }
@@ -728,6 +657,20 @@ function PolicyMetric({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-slate-900/[0.06] bg-white px-3 py-2">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
       <p className="mt-1 truncate text-sm font-semibold text-ink-900">{value}</p>
+    </div>
+  );
+}
+
+function AllocationGuardrail({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="font-medium text-slate-700">{label}</span>
+        <span className="tnum text-slate-500">{value}%</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-full rounded-full bg-brand-500" style={{ width: `${value}%` }} />
+      </div>
     </div>
   );
 }
@@ -752,21 +695,6 @@ function DeliberationStep({ role, ok, note }: { role: string; ok: boolean; note:
         <p className="text-xs font-semibold text-ink-900">{role}</p>
         <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{note}</p>
       </div>
-    </div>
-  );
-}
-
-function BoundaryItem({ label, value, ok }: { label: string; value: string; ok?: boolean }) {
-  return (
-    <div className="rounded-lg border border-slate-900/[0.06] bg-white p-3">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-      <p
-        className={`mt-1 text-sm font-medium ${
-          ok === undefined ? 'text-slate-700' : ok ? 'text-signal-emerald' : 'text-signal-rose'
-        }`}
-      >
-        {value}
-      </p>
     </div>
   );
 }
