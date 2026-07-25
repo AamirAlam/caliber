@@ -270,46 +270,57 @@ export default function DashboardPage() {
     workspace.signals.mode === 'operator' ? managedSignalFeedUrl() : workspace.signals.feedUrl || 'External feed';
   const signalFreshness = feedFreshness(feedStatus?.capturedAt ?? snapshot?.capturedAt);
   const latestRunStarted = latestWorkspaceRun ? new Date(latestWorkspaceRun.startedAt).toLocaleString() : null;
+  const walletStatusLabel = wallet
+    ? walletOwnsWorkspace
+      ? 'Owner wallet connected'
+      : 'Wallet connected'
+    : walletPermissionConfirmed
+      ? 'Wallet permission confirmed'
+      : 'Read-only';
+  const walletStatusDetail = wallet
+    ? walletOwnsWorkspace
+      ? 'Run analysis and approve actions for this treasury.'
+      : 'Connected wallet does not own this treasury.'
+    : connectedAddress
+      ? 'Wallet address detected. Create the dashboard session.'
+      : walletPermissionConfirmed
+        ? 'Paste the public key to continue.'
+        : 'Connect the owner wallet to operate this workspace.';
+  const operatingState = [
+    { label: 'Workspace', value: 'Active', active: true },
+    { label: 'Policy', value: `${workspace.policy.maxRiskScore}/100 risk`, active: true },
+    { label: 'Feed', value: signalFreshness.status, active: signalFreshness.active },
+    { label: 'Agent', value: hasWorkspaceAnalysis ? 'Decision recorded' : 'Ready to run', active: hasWorkspaceAnalysis },
+  ];
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 pb-28 sm:px-6 sm:py-8 lg:px-8 lg:py-10 lg:pb-10">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="eyebrow">Treasury control plane</p>
-          <h1 className="mt-1.5 text-[1.6rem] font-semibold tracking-tightish text-ink-900">
+          <h1 className="mt-1.5 text-[1.8rem] font-semibold tracking-tightish text-ink-900">
             {workspaceTitle}
           </h1>
-          <p className="mt-1 text-sm text-slate-500">{workspacePolicy}</p>
+          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+            Policy-governed treasury monitoring on Casper testnet.
+          </p>
         </div>
-        <span
-          className={`pill ${live ? 'border-signal-emerald/30 bg-emerald-50 text-signal-emerald' : 'border-slate-200 bg-slate-50 text-slate-500'}`}
-        >
-          <span className={`h-1.5 w-1.5 rounded-full ${live ? 'bg-signal-emerald' : 'bg-slate-400'}`} />
-          {live ? 'Live · testnet' : 'Offline'}
-        </span>
+        <div className="flex flex-wrap gap-2">
+          <span
+            className={`pill ${live ? 'border-signal-emerald/30 bg-emerald-50 text-signal-emerald' : 'border-slate-200 bg-slate-50 text-slate-500'}`}
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${live ? 'bg-signal-emerald' : 'bg-slate-400'}`} />
+            {live ? 'Live · testnet' : 'Offline'}
+          </span>
+          <span className="pill border-slate-200 bg-white text-slate-500">{walletStatusLabel}</span>
+        </div>
       </header>
 
       <section className="mt-5 rounded-xl border border-slate-900/[0.07] bg-white px-4 py-3 shadow-sm">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-ink-900">
-              {wallet
-                ? 'Treasury wallet connected'
-                : walletPermissionConfirmed
-                  ? 'Wallet permission confirmed'
-                  : 'Read-only treasury view'}
-            </p>
-            <p className="mt-0.5 text-sm text-slate-500">
-              {wallet
-                ? walletOwnsWorkspace
-                  ? 'You can trigger runs and sign approvals for this treasury.'
-                  : 'This wallet is connected, but it does not own the selected treasury.'
-                  : connectedAddress
-                  ? 'Wallet address detected. Continue to create the treasury session.'
-                  : walletPermissionConfirmed
-                    ? 'Paste the wallet public key to continue.'
-                : 'Connect the treasury wallet to create runs or approve policy-gated rebalances.'}
-            </p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-ink-900">{walletStatusLabel}</p>
+            <p className="mt-0.5 text-sm text-slate-500">{walletStatusDetail}</p>
             {connectedAddress && (
               <p className="mt-1 break-all font-mono text-xs text-slate-500">
                 {connectedAddress}
@@ -350,9 +361,30 @@ export default function DashboardPage() {
         )}
       </section>
 
+      <section className="mt-5 rounded-2xl border border-slate-900/[0.07] bg-white px-4 py-4 shadow-sm">
+        <div className="grid gap-3 sm:grid-cols-4">
+          {operatingState.map((item, index) => (
+            <div key={item.label} className="relative min-w-0 rounded-xl bg-slate-50 px-3 py-3">
+              {index < operatingState.length - 1 && (
+                <span className="absolute right-[-0.55rem] top-1/2 z-10 hidden h-px w-4 bg-slate-200 sm:block" />
+              )}
+              <div className="flex items-center gap-2">
+                <span
+                  className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                    item.active ? 'bg-signal-emerald shadow-[0_0_0_4px_rgba(5,150,105,0.12)]' : 'bg-slate-300'
+                  }`}
+                />
+                <p className="truncate text-sm font-semibold text-ink-900">{item.label}</p>
+              </div>
+              <p className="mt-1 truncate pl-4 text-xs text-slate-500">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <DashboardStat label="Funds under management" value={formatUsd(TOTAL_FUNDS_UNDER_MANAGEMENT_USD)} />
-        <DashboardStat label="Risk ceiling" value={`${workspace.policy.maxRiskScore}/100`} />
+        <DashboardStat label="Funds under management" value={formatUsd(TOTAL_FUNDS_UNDER_MANAGEMENT_USD)} detail="Policy notional" />
+        <DashboardStat label="Policy mix" value={workspacePolicy} detail={`Risk ceiling ${workspace.policy.maxRiskScore}/100`} />
         <DashboardStat
           label="Feed"
           value={workspace.signals.mode === 'operator' ? 'Self managed' : 'External'}
@@ -360,17 +392,25 @@ export default function DashboardPage() {
             label: signalFreshness.status,
             tone: signalFreshness.active ? 'active' : 'inactive',
           }}
+          detail={signalFreshness.label}
         />
-        <DashboardStat label="Vault activity" value={`${vault?.rebalanceCount ?? 0} rebalances`} />
+        <DashboardStat label="Vault activity" value={`${vault?.rebalanceCount ?? 0} rebalances`} detail="Read from Casper" />
       </section>
 
       <section className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="grid gap-5">
-          <section className="panel p-5">
+          <section className="panel overflow-hidden">
+            <div className="border-b border-slate-900/[0.06] bg-slate-50/60 px-5 py-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-ink-900">Agent analysis</p>
+                <span className={`pill ${hasWorkspaceAnalysis ? 'border-brand-200 bg-brand-50 text-brand-600' : 'border-slate-200 bg-white text-slate-500'}`}>
+                  {hasWorkspaceAnalysis ? 'Analyzed' : 'Not analyzed'}
+                </span>
+              </div>
+            </div>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <p className="eyebrow">Agent analysis</p>
-                <h2 className="mt-2 text-xl font-semibold text-ink-900">
+              <div className="p-5 sm:pr-0">
+                <h2 className="text-xl font-semibold text-ink-900">
                   {hasWorkspaceAnalysis ? headline : 'Waiting for first analysis'}
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
@@ -379,23 +419,23 @@ export default function DashboardPage() {
                     : 'The treasury policy is active. Run the agent when you want Caliber to collect live signals, score risk, and produce a decision for this workspace.'}
                 </p>
               </div>
-              {currentDecision ? (
-                <RiskGauge score={currentDecision.riskScore} band={risk?.band ?? 'low'} />
-              ) : (
-                <div className="flex h-[112px] w-[112px] shrink-0 items-center justify-center rounded-full border border-dashed border-slate-300 bg-slate-50 text-center text-xs font-semibold uppercase tracking-wide text-slate-400">
-                  No run
-                </div>
-              )}
+              <div className="px-5 pb-5 sm:p-5 sm:pl-0">
+                {currentDecision ? (
+                  <RiskGauge score={currentDecision.riskScore} band={risk?.band ?? 'low'} />
+                ) : (
+                  <EmptyRunMark />
+                )}
+              </div>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 px-5 pb-5 sm:grid-cols-3">
               <PolicyMetric label="Run status" value={latestWorkspaceRun?.status ?? 'Not run'} />
               <PolicyMetric label="Decision" value={currentDecision?.action ?? 'None'} />
               <PolicyMetric label="Last run" value={latestRunStarted ?? 'Pending'} />
             </div>
 
             {currentDecision && (
-              <div className="mt-5 border-t border-slate-900/[0.06] pt-4">
+              <div className="border-t border-slate-900/[0.06] px-5 py-4">
                 <button onClick={() => setShowReasoning((v) => !v)} className="disclosure-btn">
                   {showReasoning ? 'Hide analysis trace' : 'View analysis trace'}
                   <Chevron open={showReasoning} />
@@ -468,12 +508,22 @@ export default function DashboardPage() {
 
           <section className="panel p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
+              <div className="min-w-0">
                 <p className="eyebrow">Policy</p>
                 <h2 className="mt-2 text-lg font-semibold text-ink-900">Allocation guardrails</h2>
                 <p className="mt-2 text-sm leading-relaxed text-slate-600">
                   The agent can recommend actions, but execution is constrained by these policy limits.
                 </p>
+                <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                  <div className="min-w-0 rounded-lg bg-slate-50 px-3 py-2">
+                    <p className="font-semibold uppercase tracking-wide text-slate-400">Vault</p>
+                    <p className="mt-1 truncate font-mono">{workspace.vaultAddress}</p>
+                  </div>
+                  <div className="min-w-0 rounded-lg bg-slate-50 px-3 py-2">
+                    <p className="font-semibold uppercase tracking-wide text-slate-400">Owner</p>
+                    <p className="mt-1 truncate font-mono">{workspace.ownerAccount}</p>
+                  </div>
+                </div>
               </div>
               <div className="rounded-lg bg-slate-50 px-3 py-2 text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Single move cap</p>
@@ -491,7 +541,9 @@ export default function DashboardPage() {
         </div>
 
         <aside className="grid h-fit gap-5">
-          <section className="panel p-5">
+          <section className={`rounded-2xl border p-5 shadow-card ${
+            canApprove ? 'border-signal-emerald/25 bg-emerald-50' : 'border-slate-900/[0.07] bg-white'
+          }`}>
             <p className="eyebrow">Action</p>
             <h2 className="mt-2 text-lg font-semibold text-ink-900">
               {currentDecision ? headline : 'No action pending'}
@@ -632,10 +684,12 @@ function RiskGauge({ score, band }: { score: number; band: RiskScore['band'] }) 
 function DashboardStat({
   label,
   value,
+  detail,
   status,
 }: {
   label: string;
   value: string;
+  detail?: string;
   status?: { label: string; tone: 'active' | 'inactive' };
 }) {
   return (
@@ -648,6 +702,18 @@ function DashboardStat({
           {status.label}
         </p>
       )}
+      {detail && <p className="mt-2 truncate text-xs text-slate-500">{detail}</p>}
+    </div>
+  );
+}
+
+function EmptyRunMark() {
+  return (
+    <div className="flex h-[112px] w-[112px] shrink-0 items-center justify-center rounded-full border border-dashed border-slate-300 bg-slate-50">
+      <div className="text-center">
+        <span className="mx-auto block h-2 w-2 rounded-full bg-slate-300" />
+        <span className="mt-2 block text-xs font-semibold uppercase tracking-wide text-slate-400">No run</span>
+      </div>
     </div>
   );
 }
@@ -748,21 +814,6 @@ function TraceIcon({ kind, ok }: { kind: TraceStep['kind']; ok?: boolean }) {
     <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${tone}`}>
       {glyph}
     </span>
-  );
-}
-
-function Row({ k, v, good }: { k: string; v: string; good?: boolean }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <dt className="text-slate-400">{k}</dt>
-      <dd
-        className={`text-right ${
-          good === undefined ? 'text-slate-700' : good ? 'text-signal-emerald' : 'text-signal-amber'
-        }`}
-      >
-        {v}
-      </dd>
-    </div>
   );
 }
 
