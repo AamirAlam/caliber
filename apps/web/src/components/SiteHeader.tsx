@@ -25,8 +25,8 @@ export function SiteHeader() {
             </a>
           ))}
         </nav>
-        <Link href="/dashboard" className="btn-primary">
-          Open dashboard
+        <Link href="/onboarding" className="btn-primary">
+          Create treasury
         </Link>
       </div>
     </header>

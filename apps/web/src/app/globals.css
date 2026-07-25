@@ -48,6 +48,10 @@ body {
     @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-900/10 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-900/20 hover:bg-slate-50;
   }
 
+  .input {
+    @apply w-full rounded-xl border border-slate-900/10 bg-white px-3.5 py-2.5 text-sm text-ink-900 outline-none transition placeholder:text-slate-300 focus:border-brand-400 focus:ring-2 focus:ring-brand-100;
+  }
+
   /* Small status pill. */
   .pill {
     @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium;

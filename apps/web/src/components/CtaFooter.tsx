@@ -11,15 +11,21 @@ export function CtaFooter() {
             Put a policy at the caliber of your RWA treasury.
           </h2>
           <p className="relative mx-auto mt-4 max-w-xl text-slate-300">
-            Explore the dashboard, run an agent cycle, and watch an approved rebalance settle on
-            Casper testnet.
+            Create a treasury workspace, define policy guardrails, and let Caliber monitor
+            testnet execution with operator-gated approvals.
           </p>
           <div className="relative mt-8 flex flex-wrap justify-center gap-3">
             <Link
-              href="/dashboard"
+              href="/onboarding"
               className="inline-flex items-center justify-center rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-ink-900 transition hover:bg-slate-100"
             >
-              Open the dashboard
+              Create a treasury
+            </Link>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center justify-center rounded-xl border border-white/20 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-white/10"
+            >
+              View testnet workspace
             </Link>
             <a
               href="https://docs.casper.network"
