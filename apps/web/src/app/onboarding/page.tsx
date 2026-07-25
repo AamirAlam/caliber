@@ -23,6 +23,54 @@ const steps = [
 ] as const;
 
 type SourceMode = 'operator' | 'external';
+type PolicyPresetId = 'balanced' | 'income' | 'defensive' | 'custom';
+
+const policyPresets: Array<{
+  id: PolicyPresetId;
+  label: string;
+  description: string;
+  rwaTarget: number;
+  stableTarget: number;
+  nativeTarget: number;
+  riskLimit: number;
+}> = [
+  {
+    id: 'balanced',
+    label: 'Balanced yield',
+    description: 'Keeps RWA exposure active while preserving a meaningful stablecoin buffer.',
+    rwaTarget: 60,
+    stableTarget: 30,
+    nativeTarget: 10,
+    riskLimit: 70,
+  },
+  {
+    id: 'income',
+    label: 'Income focused',
+    description: 'Prioritizes tokenized RWA allocation with tighter reserve capacity.',
+    rwaTarget: 70,
+    stableTarget: 20,
+    nativeTarget: 10,
+    riskLimit: 65,
+  },
+  {
+    id: 'defensive',
+    label: 'Liquidity first',
+    description: 'Keeps a larger stablecoin buffer and lowers the maximum accepted risk score.',
+    rwaTarget: 45,
+    stableTarget: 45,
+    nativeTarget: 10,
+    riskLimit: 55,
+  },
+  {
+    id: 'custom',
+    label: 'Custom policy',
+    description: 'Set treasury allocation and risk limits manually.',
+    rwaTarget: 60,
+    stableTarget: 30,
+    nativeTarget: 10,
+    riskLimit: 70,
+  },
+];
 
 function shortAddress(value: string): string {
   return value.length > 18 ? `${value.slice(0, 10)}...${value.slice(-8)}` : value;
@@ -42,11 +90,14 @@ export default function OnboardingPage() {
   const [rwaTarget, setRwaTarget] = useState(60);
   const [nativeTarget, setNativeTarget] = useState(10);
   const [riskLimit, setRiskLimit] = useState(70);
+  const [policyPreset, setPolicyPreset] = useState<PolicyPresetId>('balanced');
   const [sourceMode, setSourceMode] = useState<SourceMode>('operator');
   const [feedUrl, setFeedUrl] = useState('');
   const [activating, setActivating] = useState(false);
   const [activationError, setActivationError] = useState<string | null>(null);
 
+  const selectedPolicyPresetLabel =
+    policyPresets.find((preset) => preset.id === policyPreset)?.label ?? 'Balanced yield';
   const totalAllocation = stableTarget + rwaTarget + nativeTarget;
   const workspaceReady = workspace.trim().length > 2;
   const vaultReady = vault.trim().length > 12;
@@ -57,12 +108,13 @@ export default function OnboardingPage() {
     () => [
       { label: 'Workspace', value: workspace || 'Unnamed treasury' },
       { label: 'Owner wallet', value: wallet ? shortAddress(wallet.accountHash) : connectedAddress ? shortAddress(connectedAddress) : 'Not connected' },
+      { label: 'Policy mode', value: selectedPolicyPresetLabel },
       { label: 'Vault', value: vault ? `${vault.slice(0, 10)}...${vault.slice(-8)}` : 'Not connected' },
       { label: 'Policy', value: `${rwaTarget}% RWA / ${stableTarget}% stable / ${nativeTarget}% native` },
       { label: 'Risk ceiling', value: `${riskLimit}/100` },
       { label: 'Signal source', value: sourceMode === 'operator' ? 'Caliber operator feed' : feedUrl || 'External feed pending' },
     ],
-    [connectedAddress, feedUrl, nativeTarget, riskLimit, rwaTarget, sourceMode, stableTarget, vault, wallet, workspace],
+    [connectedAddress, feedUrl, nativeTarget, riskLimit, rwaTarget, selectedPolicyPresetLabel, sourceMode, stableTarget, vault, wallet, workspace],
   );
 
   const onActivateWorkspace = async () => {
@@ -133,6 +185,37 @@ export default function OnboardingPage() {
     setConnectedAddress(null);
     setManualAddress('');
     setWalletPermissionConfirmed(false);
+  };
+
+  const onSelectPolicyPreset = (presetId: PolicyPresetId) => {
+    const preset = policyPresets.find((item) => item.id === presetId);
+    if (!preset) return;
+    setPolicyPreset(preset.id);
+    if (preset.id === 'custom') return;
+    setRwaTarget(preset.rwaTarget);
+    setStableTarget(preset.stableTarget);
+    setNativeTarget(preset.nativeTarget);
+    setRiskLimit(preset.riskLimit);
+  };
+
+  const setCustomRwaTarget = (value: number) => {
+    setPolicyPreset('custom');
+    setRwaTarget(value);
+  };
+
+  const setCustomStableTarget = (value: number) => {
+    setPolicyPreset('custom');
+    setStableTarget(value);
+  };
+
+  const setCustomNativeTarget = (value: number) => {
+    setPolicyPreset('custom');
+    setNativeTarget(value);
+  };
+
+  const setCustomRiskLimit = (value: number) => {
+    setPolicyPreset('custom');
+    setRiskLimit(value);
   };
 
   return (
@@ -211,12 +294,31 @@ export default function OnboardingPage() {
             {step === 2 && (
               <SetupBlock
                 title="Set the policy guardrails"
-                description="The agent may reason, but these deterministic limits decide what can be approved or executed."
+                description="Choose a treasury policy profile, or customize the deterministic limits that decide what can be approved or executed."
               >
-                <Allocation label="RWA target" value={rwaTarget} setValue={setRwaTarget} />
-                <Allocation label="Stablecoin buffer" value={stableTarget} setValue={setStableTarget} />
-                <Allocation label="Native CSPR" value={nativeTarget} setValue={setNativeTarget} />
-                <Allocation label="Max risk score" value={riskLimit} setValue={setRiskLimit} max={100} />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {policyPresets.map((preset) => (
+                    <button
+                      key={preset.id}
+                      onClick={() => onSelectPolicyPreset(preset.id)}
+                      className={`rounded-xl border p-4 text-left transition ${
+                        policyPreset === preset.id
+                          ? 'border-brand-500 bg-brand-50 text-ink-900'
+                          : 'border-slate-900/[0.07] bg-white text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold">{preset.label}</span>
+                      <span className="mt-1 block text-xs leading-relaxed text-slate-500">{preset.description}</span>
+                      <span className="mt-3 block font-mono text-xs text-slate-500">
+                        {preset.rwaTarget}% RWA / {preset.stableTarget}% stable / {preset.nativeTarget}% CSPR / risk {preset.riskLimit}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <Allocation label="RWA target" value={rwaTarget} setValue={setCustomRwaTarget} />
+                <Allocation label="Stablecoin buffer" value={stableTarget} setValue={setCustomStableTarget} />
+                <Allocation label="Native CSPR" value={nativeTarget} setValue={setCustomNativeTarget} />
+                <Allocation label="Max risk score" value={riskLimit} setValue={setCustomRiskLimit} max={100} />
                 <p className={`text-sm ${totalAllocation === 100 ? 'text-signal-emerald' : 'text-signal-rose'}`}>
                   Allocation total: {totalAllocation}%
                 </p>
