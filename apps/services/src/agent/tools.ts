@@ -57,7 +57,7 @@ export function buildTools(ctx: AgentContext) {
         if (!legs || legs.length === 0) {
           return { violations: evaluatePolicy(ctx.policy, ctx.risk, ctx.snapshot) };
         }
-        const proposal = buildRebalanceFromLegs(ctx.policy, ctx.runId, legs);
+        const proposal = buildRebalanceFromLegs(ctx.policy, ctx.runId, legs, ctx.snapshot);
         return { violations: evaluatePolicy(ctx.policy, ctx.risk, ctx.snapshot, proposal) };
       },
     }),

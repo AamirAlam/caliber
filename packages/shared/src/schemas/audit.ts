@@ -10,6 +10,8 @@ export const TransactionRecordSchema = z.object({
   entryPoint: z.string().min(1),
   /** The rebalance request this tx fulfils, if any. */
   rebalanceRequestId: z.string().optional(),
+  /** blake2b hash of the decision content (legs, policy, snapshot) anchored on-chain. */
+  contentHash: z.string().optional(),
   network: z.enum(['casper-testnet', 'casper-mainnet']).default('casper-testnet'),
   error: z.string().optional(),
   submittedAt: z.string().datetime().optional(),

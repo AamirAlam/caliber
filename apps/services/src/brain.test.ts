@@ -132,7 +132,7 @@ describe('deterministic gate on agent-proposed legs', () => {
     const risk = scoreRisk(snapshot);
     const proposal = buildRebalanceFromLegs(samplePolicy, 'r', [
       { fromAssetId: 'tbill-rwa', toAssetId: 'usdc', weight: 0.12 },
-    ]);
+    ], snapshot);
     expect(proposal.legs[0]?.amount).toBe(String(Math.round(0.12 * 1_200_000)));
     expect(evaluatePolicy(samplePolicy, risk, snapshot, proposal)).toHaveLength(0);
   });
@@ -142,7 +142,7 @@ describe('deterministic gate on agent-proposed legs', () => {
     const risk = scoreRisk(snapshot);
     const proposal = buildRebalanceFromLegs(samplePolicy, 'r', [
       { fromAssetId: 'tbill-rwa', toAssetId: 'usdc', weight: 0.5 },
-    ]);
+    ], snapshot);
     const violations = evaluatePolicy(samplePolicy, risk, snapshot, proposal);
     expect(violations.some((v) => v.constraint === 'maxSingleRebalancePct')).toBe(true);
   });
@@ -153,7 +153,7 @@ describe('deterministic gate on agent-proposed legs', () => {
     // tbill-rwa → cspr: within cap, but doesn't add to the stablecoin buffer.
     const proposal = buildRebalanceFromLegs(samplePolicy, 'r', [
       { fromAssetId: 'tbill-rwa', toAssetId: 'cspr', weight: 0.05 },
-    ]);
+    ], snapshot);
     const violations = evaluatePolicy(samplePolicy, risk, snapshot, proposal);
     expect(violations.some((v) => v.constraint === 'noImprovement')).toBe(true);
   });

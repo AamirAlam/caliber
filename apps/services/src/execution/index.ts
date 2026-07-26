@@ -15,13 +15,41 @@ import { log } from '../logger.js';
  * In `CALIBER_DRY_RUN` mode it returns a synthetic `submitted` record so local
  * development can exercise the execution path without a funded key.
  */
+/**
+ * blake2b-256 hash of the decision's canonical content (legs, amounts, policy,
+ * snapshot, risk). Anchored on-chain inside the recorded rebalance id so the
+ * audit stamp is verifiable against the off-chain record.
+ */
+export function decisionContentHash(
+  rebalance: RebalanceRequest,
+  ctx: { policyId: string; snapshotId: string; riskScore: number },
+): string {
+  const canonical = JSON.stringify({
+    rebalanceId: rebalance.id,
+    policyId: ctx.policyId,
+    snapshotId: ctx.snapshotId,
+    riskScore: ctx.riskScore,
+    legs: rebalance.legs.map((leg) => ({
+      from: leg.fromAssetId,
+      to: leg.toAssetId,
+      weight: leg.weight,
+      amount: leg.amount,
+    })),
+  });
+  return Buffer.from(casper.byteHash(Buffer.from(canonical, 'utf8'))).toString('hex');
+}
+
 export class CasperExecutor {
-  async submit(request: RebalanceRequest): Promise<TransactionRecord> {
+  async submit(request: RebalanceRequest, contentHash?: string): Promise<TransactionRecord> {
+    // The deployed contract records a single string; suffixing the content hash
+    // anchors the decision digest without a contract change.
+    const recordedId = contentHash ? `${request.id}:${contentHash}` : request.id;
     const base: TransactionRecord = {
       id: `tx_${request.id}`,
       status: 'prepared',
       entryPoint: 'record_rebalance',
       rebalanceRequestId: request.id,
+      contentHash,
       network: 'casper-testnet',
     };
 
@@ -37,7 +65,7 @@ export class CasperExecutor {
 
     try {
       const key = loadKey();
-      const args = casper.Args.fromMap({ rebalance_id: casper.CLValue.newCLString(request.id) });
+      const args = casper.Args.fromMap({ rebalance_id: casper.CLValue.newCLString(recordedId) });
       const tx = new casper.ContractCallBuilder()
         .byPackageHash(config.casper.vaultContractHash)
         .entryPoint('record_rebalance')

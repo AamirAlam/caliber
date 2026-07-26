@@ -46,6 +46,11 @@ const workspaceRules = <T extends z.ZodTypeAny>(schema: T) =>
 
 export const TreasuryWorkspaceSchema = workspaceRules(TreasuryWorkspaceBaseSchema);
 
+export const UpdateWorkspacePolicySchema = TreasuryWorkspaceBaseSchema.shape.policy.refine(
+  (policy) => policy.rwaTarget + policy.stableTarget + policy.nativeTarget === 100,
+  { message: 'workspace policy allocations must total 100%' },
+);
+
 export const CreateTreasuryWorkspaceSchema = workspaceRules(
   TreasuryWorkspaceBaseSchema.omit({
     id: true,

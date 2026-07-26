@@ -43,7 +43,7 @@ describe('reviewContext — grounded facts', () => {
       snapshot,
       rebalance: buildRebalanceFromLegs(samplePolicy, 'r', [
         { fromAssetId: 'tbill-rwa', toAssetId: 'usdc', weight: 0.12 },
-      ]),
+      ], snapshot),
       rationale: 'de-risk',
     };
     const ctx = reviewContext(input);

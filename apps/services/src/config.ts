@@ -9,6 +9,7 @@ export interface CaliberConfig {
     secretKeyPath: string;
     keyAlgo: string;
     paymentMotes: number;
+    treasuryAccount: string;
   };
   ai: {
     provider: string;
@@ -30,6 +31,7 @@ export interface CaliberConfig {
     feedUrl: string;
     timeoutMs: number;
     maxAgeMs: number;
+    priceApiUrl: string;
   };
   mcp: {
     casperUrl: string;
@@ -57,6 +59,8 @@ export function loadConfig(env: NodeJS.ProcessEnv): CaliberConfig {
       keyAlgo: env.CALIBER_KEY_ALGO ?? 'ed25519',
       /** Payment (motes) for the record_rebalance contract call. */
       paymentMotes: numberEnv(env.CALIBER_PAYMENT_MOTES, 2_500_000_000),
+      /** Treasury account public key (hex) whose CSPR balance backs live FUM signals. */
+      treasuryAccount: env.CALIBER_TREASURY_ACCOUNT ?? '',
     },
     ai: aiConfig(env),
     api: {
@@ -74,6 +78,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): CaliberConfig {
       feedUrl: env.CALIBER_SIGNAL_FEED_URL ?? env.RWA_FEED_URL ?? '',
       timeoutMs: numberEnv(env.CALIBER_SIGNAL_FEED_TIMEOUT_MS, 10000),
       maxAgeMs: numberEnv(env.CALIBER_SIGNAL_MAX_AGE_MS, 300000),
+      priceApiUrl: env.CALIBER_PRICE_API_URL ?? '',
     },
     mcp: {
       casperUrl: env.CALIBER_CASPER_MCP_URL ?? '',

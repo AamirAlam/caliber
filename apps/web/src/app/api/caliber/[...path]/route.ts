@@ -89,6 +89,12 @@ function rewriteMutationBody(
       ownerAccount: wallet.accountHash,
     });
   }
+  if (route === 'runs') {
+    return JSON.stringify({
+      ...body,
+      ownerAccount: wallet.accountHash,
+    });
+  }
   if (route === 'approve') {
     return JSON.stringify({
       ...body,

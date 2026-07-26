@@ -59,12 +59,32 @@ export async function authenticateWallet(publicKey: string): Promise<WalletSessi
   if (!trimmedPublicKey) {
     throw new Error('Wallet public key is required before authentication.');
   }
+  const providers = getProviders();
+  if (providers.length === 0) {
+    throw new Error('Casper wallet extension is required to sign in.');
+  }
+  const challengeRes = await fetch('/api/wallet/session', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ publicKey: trimmedPublicKey }),
+  });
+  if (!challengeRes.ok) throw new Error('Wallet sign-in challenge could not be created.');
+  const challenge = (await challengeRes.json()) as {
+    message: string;
+    nonce: string;
+    issuedAt: string;
+    mac: string;
+  };
+  const signature = await signWalletMessage(providers, challenge.message, trimmedPublicKey);
   const res = await fetch('/api/wallet/session', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      accountHash: trimmedPublicKey,
       publicKey: trimmedPublicKey,
+      nonce: challenge.nonce,
+      issuedAt: challenge.issuedAt,
+      mac: challenge.mac,
+      signature,
     }),
   });
   if (!res.ok) throw new Error('Wallet session could not be created.');
