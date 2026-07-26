@@ -43,27 +43,37 @@ straight from global state — no off-chain bookkeeping.
 
 - **A real multi-agent decision, not a narrator.** A **Proposer** agent designs the
   move (which asset to trim, sizing, rationale) and must pass the deterministic
-  policy engine; an adversarial **Risk-Reviewer** agent then signs off or vetoes.
+  policy engine; an adversarial **Risk-Reviewer** panel (3 votes, majority veto,
+  fails closed) then signs off or vetoes.
 - **Deterministic guardrails are the only gate on execution.** Allocation bands,
-  liquidity floors, risk ceilings, and single-rebalance caps are enforced in code —
-  the LLM can never loosen them, only propose within them.
+  liquidity floors, risk ceilings, counterparty allowlists, and single-rebalance
+  caps are enforced in code — the LLM can never loosen them, only propose within them.
+- **Live on-chain treasury data.** Funds under management are derived from the
+  treasury account's real Casper balance valued at the live CSPR/USD market price,
+  flowing into the same signal snapshot the policy engine evaluates.
+- **Verifiable decisions.** Every executed rebalance anchors a blake2b content hash
+  of the full decision (legs, amounts, policy, signals, risk score) on-chain inside
+  the recorded rebalance id — the audit stamp can be checked against the off-chain record.
 - **Workspace-scoped control.** A treasury owner creates a workspace, connects a
-  wallet session, reviews policy/feed status, then starts an agent analysis. The
-  dashboard does not surface actions until that workspace has a real agent decision.
-- **Human-in-the-loop + on-chain audit.** Nothing settles without approval, and every
-  run's signals, decision, rationale, review, and deploy hash are recorded.
+  wallet (signed sign-in challenge when the extension supports it), edits policy
+  guardrails from the dashboard, and starts agents that monitor on a schedule.
+- **Human-in-the-loop + on-chain audit.** Nothing settles without a wallet-signed
+  approval, and every run's signals, decision, rationale, review, and deploy hash
+  are recorded.
 - **Model-agnostic.** The agent runs on the Vercel AI SDK; swap the LLM via config
-  (Claude by default). With no API key it falls back to a deterministic decision, so
-  local and testnet operations can still run end-to-end.
+  (Claude Haiku 4.5 by default for cost-efficient deliberation). With no API key it
+  falls back to a deterministic decision, so local and testnet operations still run
+  end-to-end.
 
 ## How it works
 
 ```
-collect signals → score risk → PROPOSER agent designs a move
+collect signals (feed + live on-chain balance × CSPR price)
+    → score risk → PROPOSER agent designs a move
     → deterministic policy gate (the hard gate)
-    → RISK-REVIEWER agent signs off / vetoes
-    → await human approval
-    → execute on Casper (record_rebalance)
+    → RISK-REVIEWER panel signs off / vetoes (majority, fails closed)
+    → await human approval (wallet signature, verified server-side)
+    → execute on Casper (record_rebalance, decision content hash anchored)
     → record audit log + read on-chain state
 ```
 
@@ -114,9 +124,14 @@ Copy the env templates (done by `scripts/setup.sh`) and fill in as needed:
 - `apps/services/.env` — `CASPER_NODE_RPC_URL`, `CALIBER_VAULT_CONTRACT_HASH`,
   `CASPER_SECRET_KEY_PATH` (+ `CALIBER_KEY_ALGO`), `CALIBER_ADMIN_TOKEN`, and
   `CALIBER_DRY_RUN=false` for real testnet execution.
+- **Live treasury signals (optional):** set `CALIBER_TREASURY_ACCOUNT` (public key
+  hex) to derive funds under management from the account's real on-chain CSPR
+  balance valued at the live market price (`CALIBER_PRICE_API_URL` overrides the
+  price endpoint). Without it, a labeled notional is used.
 - **AI (optional):** set `ANTHROPIC_API_KEY` to enable the live Proposer + Risk-Reviewer
-  agents. Swap providers with `CALIBER_LLM_PROVIDER` / `CALIBER_DECISION_MODEL`. Without a
-  key, the deterministic decision path runs.
+  agents (default model: `claude-haiku-4-5`). Swap providers with
+  `CALIBER_LLM_PROVIDER` / `CALIBER_DECISION_MODEL`. Without a key, the
+  deterministic decision path runs.
 - `apps/web/.env.local` — `SERVICES_URL`, `CALIBER_ADMIN_TOKEN`,
   `WALLET_SESSION_SECRET`, `NEXT_PUBLIC_VAULT_CONTRACT_HASH`,
   `NEXT_PUBLIC_EXPLORER_BASE`.
@@ -148,10 +163,10 @@ This avoids browser-to-Railway CORS entirely. Vercel calls Railway server-to-ser
 ## Product flow
 
 1. Create a treasury workspace with a vault package hash, policy preset/custom guardrails, and the self-managed feed.
-2. Connect the treasury owner wallet to create a wallet session for dashboard controls.
-3. Open the dashboard to review funds under management, current policy, feed status/freshness, and whether this workspace has been analyzed.
-4. **Run analysis** → the backend agent collects live signals, scores risk, evaluates the workspace policy, and records a decision trace.
-5. If the agent recommends a policy-compliant rebalance, the action pane asks the owner to approve and settle on Casper. No action is shown before an agent decision exists.
+2. Connect the treasury owner wallet — a signed sign-in challenge proves key ownership when the extension supports it (with a paste-key fallback for read access).
+3. Open the dashboard to review funds under management (live on-chain balance when configured), current policy, feed status/freshness, and run history. Owners can edit allocation and risk guardrails in place, and switch between multiple treasuries from the sidebar.
+4. **Start agents** → the backend monitors the workspace autonomously on its interval; each run collects live signals, scores risk, runs the proposer/reviewer deliberation against the workspace policy, and records a full decision trace. The dashboard shows the next-run ETA.
+5. If the agents recommend a policy-compliant rebalance, the action pane asks the owner to approve (wallet signature, verified server-side) and settle on Casper. No action is shown before an agent decision exists.
 
 ## Casper AI toolkit usage
 
@@ -178,7 +193,24 @@ Planned launch integrations:
 
 `init` · `set_policy` · `set_paused` · **`record_rebalance`** (tx-producing) ·
 `is_paused` · `rebalance_count` · `policy_version`. Owner-gated; emits
-`RebalanceRecorded` / `PausedSet`. Deploy guide: [`docs/contract-deployment.md`](docs/contract-deployment.md).
+`RebalanceRecorded` / `PausedSet`. Approved rebalances are recorded as
+`<rebalance_id>:<blake2b decision hash>`, anchoring a verifiable digest of the
+decision (legs, amounts, policy, signal snapshot, risk score) on-chain.
+Deploy guide: [`docs/contract-deployment.md`](docs/contract-deployment.md).
+
+## Roadmap: from testnet to pilots
+
+Caliber's decision architecture is production-shaped today; the path to real
+treasury pilots is sequenced and already underway:
+
+1. **Done during the buildathon** — live on-chain FUM signals, challenge-signed
+   wallet sessions, in-dashboard policy governance, enforced counterparty
+   allowlists, and on-chain decision content hashes.
+2. **Next** — x402-paid premium signal feeds (agents pay per request),
+   CSPR.cloud-hosted chain data, and CSPR.click as the wallet approval surface.
+3. **Pilot readiness** — per-vault token custody and real settlement legs
+   (today the contract anchors decisions; settlement is the next milestone),
+   durable run scheduling, and mainnet deployment with a partner DAO treasury.
 
 ## License
 
