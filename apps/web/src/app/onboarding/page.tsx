@@ -118,6 +118,7 @@ export default function OnboardingPage() {
       { label: 'Risk ceiling', value: `${riskLimit}/100` },
       { label: 'Signal source', value: sourceMode === 'operator' ? 'Self managed feed' : 'External feed coming soon' },
       { label: 'Feed URL', value: sourceMode === 'operator' ? managedFeedUrl : 'Coming soon' },
+      { label: 'Agent status', value: 'Stopped until started from dashboard' },
     ],
     [connectedAddress, managedFeedUrl, nativeTarget, riskLimit, rwaTarget, selectedPolicyPresetLabel, sourceMode, stableTarget, vault, wallet, workspace],
   );
@@ -395,8 +396,8 @@ export default function OnboardingPage() {
 
             {step === 4 && (
               <SetupBlock
-                title="Review and activate"
-                description="Connect the owner wallet, then create the operating workspace on the services backend. Agent runs, approvals, and audit history are scoped to it."
+                title="Review and create"
+                description="Connect the owner wallet, then create the operating workspace on the services backend. Agents start stopped by default and can be started from the dashboard."
               >
                 <div className="grid gap-3">
                   {summary.map((item) => (
@@ -456,7 +457,7 @@ export default function OnboardingPage() {
                   disabled={!ready || activating}
                   className="btn-primary mt-6 w-full disabled:opacity-40"
                 >
-                  {activating ? 'Activating...' : 'Activate workspace'}
+                  {activating ? 'Creating...' : 'Create workspace'}
                 </button>
                 {!ready && <ActivationChecklist
                   walletReady={Boolean(wallet)}

@@ -116,7 +116,12 @@ describe('service observability API', () => {
       payload,
     });
     expect(created.statusCode).toBe(201);
-    expect(created.json()).toMatchObject({ name: payload.name, id: expect.stringMatching(/^workspace_/) });
+    expect(created.json()).toMatchObject({
+      name: payload.name,
+      id: expect.stringMatching(/^workspace_/),
+      ownerAccount: payload.ownerAccount,
+      agentStatus: 'stopped',
+    });
 
     const workspaceId = created.json().id as string;
     const detail = await app.inject({ method: 'GET', url: `/workspaces/${workspaceId}` });
@@ -126,6 +131,75 @@ describe('service observability API', () => {
     const list = await app.inject({ method: 'GET', url: '/workspaces' });
     expect(list.statusCode).toBe(200);
     expect(list.json()).toHaveLength(1);
+  });
+
+  it('filters workspaces by owner account', async () => {
+    const { app, audit } = await testServer();
+    const base = {
+      name: 'Treasury',
+      vaultContractHash: 'contract-package-test',
+      network: 'casper-test' as const,
+      policy: {
+        rwaTarget: 60,
+        stableTarget: 30,
+        nativeTarget: 10,
+        maxRiskScore: 70,
+      },
+      signals: {
+        mode: 'operator' as const,
+        feedUrl: '',
+      },
+      agentStatus: 'stopped' as const,
+      createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:00.000Z',
+    };
+    await audit.saveWorkspace({ ...base, id: 'workspace_owner', ownerAccount: 'owner-wallet' });
+    await audit.saveWorkspace({ ...base, id: 'workspace_other', ownerAccount: 'other-wallet' });
+
+    const res = await app.inject({ method: 'GET', url: '/workspaces?ownerAccount=owner-wallet' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject([{ id: 'workspace_owner', ownerAccount: 'owner-wallet' }]);
+  });
+
+  it('starts and stops workspace agents for the owner wallet', async () => {
+    const { app, audit } = await testServer();
+    await audit.saveWorkspace({
+      id: 'workspace_1',
+      name: 'RWA Income Treasury',
+      ownerAccount: 'owner-wallet',
+      vaultContractHash: 'contract-package-test',
+      network: 'casper-test',
+      policy: {
+        rwaTarget: 60,
+        stableTarget: 30,
+        nativeTarget: 10,
+        maxRiskScore: 70,
+      },
+      signals: {
+        mode: 'operator',
+        feedUrl: '',
+      },
+      agentStatus: 'stopped',
+      createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:00.000Z',
+    });
+
+    const started = await app.inject({
+      method: 'POST',
+      url: '/workspaces/workspace_1/agent',
+      payload: { status: 'active', ownerAccount: 'owner-wallet' },
+    });
+    expect(started.statusCode).toBe(200);
+    expect(started.json()).toMatchObject({ id: 'workspace_1', agentStatus: 'active' });
+
+    const stopped = await app.inject({
+      method: 'POST',
+      url: '/workspaces/workspace_1/agent',
+      payload: { status: 'stopped', ownerAccount: 'owner-wallet' },
+    });
+    expect(stopped.statusCode).toBe(200);
+    expect(stopped.json()).toMatchObject({ id: 'workspace_1', agentStatus: 'stopped' });
   });
 
   it('rejects invalid workspace payloads', async () => {

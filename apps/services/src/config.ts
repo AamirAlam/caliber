@@ -24,6 +24,7 @@ export interface CaliberConfig {
   loop: {
     intervalMs: number;
     dryRun: boolean;
+    workspaceRunIntervalMs: number;
   };
   signals: {
     feedUrl: string;
@@ -67,6 +68,7 @@ export function loadConfig(env: NodeJS.ProcessEnv): CaliberConfig {
     loop: {
       intervalMs: numberEnv(env.CALIBER_LOOP_INTERVAL_MS, 60000),
       dryRun: boolEnv(env.CALIBER_DRY_RUN, true),
+      workspaceRunIntervalMs: numberEnv(env.CALIBER_WORKSPACE_RUN_INTERVAL_MS, 600000),
     },
     signals: {
       feedUrl: env.CALIBER_SIGNAL_FEED_URL ?? env.RWA_FEED_URL ?? '',
@@ -150,6 +152,7 @@ export function validateRuntimeConfig(c: CaliberConfig = config): void {
 
   positive('PORT/CALIBER_API_PORT', c.api.port);
   positive('CALIBER_LOOP_INTERVAL_MS', c.loop.intervalMs);
+  positive('CALIBER_WORKSPACE_RUN_INTERVAL_MS', c.loop.workspaceRunIntervalMs);
   positive('CALIBER_PAYMENT_MOTES', c.casper.paymentMotes);
   positive('CALIBER_REVIEW_VOTES', c.ai.reviewVotes);
   positive('CALIBER_SIGNAL_FEED_TIMEOUT_MS', c.signals.timeoutMs);

@@ -178,7 +178,11 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
   });
   app.get('/policy', async () => state.activePolicy);
   app.get('/signals/feed', async () => buildOperatorSignalFeed());
-  app.get('/workspaces', async () => audit.listWorkspaces());
+  app.get('/workspaces', async (req) => {
+    const ownerAccount = ownerAccountFromQuery(req);
+    const workspaces = await audit.listWorkspaces();
+    return ownerAccount ? workspaces.filter((workspace) => ownsWorkspace(workspace, ownerAccount)) : workspaces;
+  });
 
   app.get<{ Params: { id: string } }>('/workspaces/:id', async (req, reply) => {
     const workspace = await audit.getWorkspace(req.params.id);
@@ -195,12 +199,39 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
     const workspace: TreasuryWorkspace = {
       ...parsed.data,
       id: `workspace_${randomUUID().slice(0, 12)}`,
+      agentStatus: 'stopped',
+      agentStoppedAt: now,
       createdAt: now,
       updatedAt: now,
     };
     await audit.saveWorkspace(workspace);
     return reply.code(201).send(workspace);
   });
+
+  app.post<{ Params: { id: string }; Body: { status?: 'active' | 'stopped'; ownerAccount?: string } }>(
+    '/workspaces/:id/agent',
+    async (req, reply) => {
+      const workspace = await audit.getWorkspace(req.params.id);
+      if (!workspace) return reply.code(404).send({ error: 'workspace not found' });
+      if (req.body?.ownerAccount && !ownsWorkspace(workspace, req.body.ownerAccount)) {
+        return reply.code(403).send({ error: 'wallet does not own this workspace' });
+      }
+      const status = req.body?.status;
+      if (status !== 'active' && status !== 'stopped') {
+        return reply.code(400).send({ error: 'status must be active or stopped' });
+      }
+      const now = new Date().toISOString();
+      const updated: TreasuryWorkspace = {
+        ...workspace,
+        agentStatus: status,
+        agentStartedAt: status === 'active' ? now : workspace.agentStartedAt,
+        agentStoppedAt: status === 'stopped' ? now : workspace.agentStoppedAt,
+        updatedAt: now,
+      };
+      await audit.saveWorkspace(updated);
+      return updated;
+    },
+  );
 
   app.get('/signals/latest', async (_req, reply) =>
     state.latestSnapshot ?? reply.code(404).send({ error: 'no snapshot yet' }),
@@ -294,7 +325,16 @@ function walletOwnsWorkspace(
   workspace: TreasuryWorkspace,
   approval: { accountHash: string; publicKey: string },
 ): boolean {
-  return workspace.ownerAccount === approval.accountHash || workspace.ownerAccount === approval.publicKey;
+  return ownsWorkspace(workspace, approval.accountHash) || ownsWorkspace(workspace, approval.publicKey);
+}
+
+function ownsWorkspace(workspace: TreasuryWorkspace, account: string): boolean {
+  return workspace.ownerAccount === account;
+}
+
+function ownerAccountFromQuery(req: FastifyRequest): string | undefined {
+  const query = req.query as { ownerAccount?: unknown };
+  return typeof query.ownerAccount === 'string' && query.ownerAccount ? query.ownerAccount : undefined;
 }
 
 function verifyWalletSignature(publicKeyHex: string, message: string, signatureHex: string): boolean {

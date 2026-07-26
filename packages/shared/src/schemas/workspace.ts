@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const WorkspaceSourceModeSchema = z.enum(['operator', 'external']);
+export const WorkspaceAgentStatusSchema = z.enum(['stopped', 'active']);
 
 const TreasuryWorkspaceBaseSchema = z.object({
   id: z.string().min(1),
@@ -18,6 +19,9 @@ const TreasuryWorkspaceBaseSchema = z.object({
     mode: WorkspaceSourceModeSchema,
     feedUrl: z.string(),
   }),
+  agentStatus: WorkspaceAgentStatusSchema.default('stopped'),
+  agentStartedAt: z.string().datetime().optional(),
+  agentStoppedAt: z.string().datetime().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

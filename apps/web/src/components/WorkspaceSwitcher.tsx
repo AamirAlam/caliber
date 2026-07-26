@@ -11,29 +11,47 @@ import {
   listWorkspaces,
   saveWorkspaces,
 } from '@/lib/workspaces';
+import { loadWalletSession, subscribeWalletPublicKey } from '@/lib/walletClient';
 
 export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const [workspaces, setWorkspaces] = useState<TreasuryWorkspace[]>([]);
   const [activeId, setActiveId] = useState<string>('');
+  const [ownerAccount, setOwnerAccount] = useState<string | null>(null);
 
   const refreshLocal = useCallback(() => {
     const selectedWorkspaceId =
       typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('workspace');
     const selected = getWorkspace(selectedWorkspaceId) ?? getActiveWorkspace();
-    setWorkspaces(listWorkspaces());
+    const visibleWorkspaces = ownerAccount
+      ? listWorkspaces().filter((workspace) => workspace.ownerAccount === ownerAccount)
+      : [];
+    setWorkspaces(visibleWorkspaces);
     setActiveId(selected?.id ?? '');
+  }, [ownerAccount]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeWalletPublicKey((publicKey) => setOwnerAccount(publicKey));
+    void loadWalletSession()
+      .then((session) => setOwnerAccount(session?.accountHash ?? null))
+      .catch(() => setOwnerAccount(null));
+    return unsubscribe;
   }, []);
 
   useEffect(() => {
+    if (!ownerAccount) {
+      setWorkspaces([]);
+      setActiveId('');
+      return;
+    }
     refreshLocal();
-    void api.getWorkspaces().then((remoteWorkspaces) => {
+    void api.getWorkspaces(ownerAccount).then((remoteWorkspaces) => {
       if (!remoteWorkspaces) return;
       saveWorkspaces(remoteWorkspaces);
       refreshLocal();
     });
-  }, [refreshLocal]);
+  }, [ownerAccount, refreshLocal]);
 
   const active = useMemo(
     () => workspaces.find((workspace) => workspace.id === activeId) ?? workspaces[0] ?? null,

@@ -19,6 +19,7 @@ export class Scheduler {
   constructor(
     private readonly deps: OrchestratorDeps,
     private readonly intervalMs: number = config.loop.intervalMs,
+    private readonly workspaceRunIntervalMs: number = config.loop.workspaceRunIntervalMs,
   ) {}
 
   start(): void {
@@ -43,9 +44,22 @@ export class Scheduler {
     this.running = true;
     this.lastStartedAt = new Date().toISOString();
     try {
-      await runAgentLoop(this.deps, ++this.seq, options);
-      this.lastSucceededAt = new Date().toISOString();
-      this.lastError = undefined;
+      if (options.workspaceId) {
+        await this.runOne(options);
+      } else {
+        const workspaces = await this.deps.audit.listWorkspaces();
+        const activeWorkspaces = workspaces.filter((workspace) => workspace.agentStatus === 'active');
+        if (workspaces.length === 0) {
+          await this.runOne();
+        } else {
+          const runs = await this.deps.audit.listRuns();
+          for (const workspace of activeWorkspaces) {
+            if (shouldRunWorkspace(workspace.id, runs, this.workspaceRunIntervalMs)) {
+              await this.runOne({ workspaceId: workspace.id });
+            }
+          }
+        }
+      }
     } catch (err) {
       this.lastFailedAt = new Date().toISOString();
       this.lastError = String(err);
@@ -66,4 +80,29 @@ export class Scheduler {
       lastError: this.lastError,
     };
   }
+
+  private async runOne(options: RunAgentLoopOptions = {}): Promise<void> {
+    try {
+      await runAgentLoop(this.deps, ++this.seq, options);
+      this.lastSucceededAt = new Date().toISOString();
+      this.lastError = undefined;
+    } catch (err) {
+      this.lastFailedAt = new Date().toISOString();
+      this.lastError = String(err);
+      log.error('agent loop failed', { seq: this.seq, workspaceId: options.workspaceId, err: String(err) });
+    }
+  }
+}
+
+function shouldRunWorkspace(
+  workspaceId: string,
+  runs: Awaited<ReturnType<OrchestratorDeps['audit']['listRuns']>>,
+  intervalMs: number,
+  now = Date.now(),
+): boolean {
+  const latest = runs.find((run) => run.workspaceId === workspaceId);
+  if (!latest) return true;
+  if (latest.status === 'running') return false;
+  const lastStarted = Date.parse(latest.startedAt);
+  return !Number.isFinite(lastStarted) || now - lastStarted >= intervalMs;
 }

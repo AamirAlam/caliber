@@ -74,10 +74,15 @@ export const api = {
   getRun: (id: string) => get<RunDetail>(`/runs/${id}`),
   getVaultState: () => get<VaultState>('/vault/state'),
   getFeedStatus: () => getLocal<FeedStatus>('/api/feed/status'),
-  getWorkspaces: () => get<TreasuryWorkspace[]>('/workspaces'),
+  getWorkspaces: (ownerAccount?: string) =>
+    get<TreasuryWorkspace[]>(
+      ownerAccount ? `/workspaces?ownerAccount=${encodeURIComponent(ownerAccount)}` : '/workspaces',
+    ),
   getWorkspace: (id: string) => get<TreasuryWorkspace>(`/workspaces/${id}`),
   createWorkspace: (workspace: CreateTreasuryWorkspace) =>
     post<TreasuryWorkspace>('/workspaces', workspace),
+  setWorkspaceAgentStatus: (id: string, status: 'active' | 'stopped', ownerAccount?: string) =>
+    post<TreasuryWorkspace>(`/workspaces/${id}/agent`, { status, ownerAccount }),
   runNow: (workspaceId?: string) =>
     post<{
       snapshot: SignalSnapshot | null;

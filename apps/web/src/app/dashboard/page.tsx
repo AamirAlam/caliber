@@ -4,11 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AGENT_ROLES } from '@caliber/shared';
 import type { AgentRunLog, Recommendation, RiskScore, SignalSnapshot, TraceStep, TreasuryPolicy } from '@caliber/shared';
-import { api, type FeedStatus, type VaultState } from '@/lib/api';
-import { PageLoader } from '@/components/Spinner';
+import { api, type FeedStatus, type RunDetail, type VaultState } from '@/lib/api';
+import { PageLoader, Spinner } from '@/components/Spinner';
 import { MaintenanceMode } from '@/components/MaintenanceMode';
 import { feedFreshness, managedSignalFeedUrl } from '@/lib/signalFeed';
-import { activateWorkspace, getWorkspace, type TreasuryWorkspace } from '@/lib/workspaces';
+import { activateWorkspace, getWorkspace, saveWorkspaces, type TreasuryWorkspace } from '@/lib/workspaces';
 import {
   authenticateWallet,
   connectWalletProvider,
@@ -22,6 +22,7 @@ import type { WalletSession } from '@/lib/walletAuth';
 
 const EXPLORER = process.env.NEXT_PUBLIC_EXPLORER_BASE ?? 'https://testnet.cspr.live';
 const TOTAL_FUNDS_UNDER_MANAGEMENT_USD = 1_200_000;
+const HISTORY_PAGE_SIZE = 6;
 
 const BANDS = {
   low: { label: 'Low', color: '#059669', tint: 'text-signal-emerald' },
@@ -50,6 +51,10 @@ export default function DashboardPage() {
   const [manualAddress, setManualAddress] = useState('');
   const [walletPermissionConfirmed, setWalletPermissionConfirmed] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
+  const [agentStatusBusy, setAgentStatusBusy] = useState(false);
+  const [showRunHistory, setShowRunHistory] = useState(false);
+  const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
+  const [historyDetail, setHistoryDetail] = useState<RunDetail | null>(null);
 
   const refresh = useCallback(async () => {
     const [p, s, r, v] = await Promise.all([
@@ -137,6 +142,27 @@ export default function DashboardPage() {
     };
   }, [refresh]);
 
+  const ownerAccount = wallet?.accountHash ?? connectedAddress;
+
+  useEffect(() => {
+    if (!ownerAccount) return;
+    void api.getWorkspaces(ownerAccount).then((remoteWorkspaces) => {
+      if (!remoteWorkspaces) return;
+      saveWorkspaces(remoteWorkspaces);
+      const currentWorkspaceIsOwned = workspace?.ownerAccount === ownerAccount;
+      const nextWorkspace = currentWorkspaceIsOwned && workspace?.id
+        ? remoteWorkspaces.find((item) => item.id === workspace.id) ?? null
+        : remoteWorkspaces[0] ?? null;
+      if (nextWorkspace) {
+        activateWorkspace(nextWorkspace);
+        setWorkspace(nextWorkspace);
+      } else {
+        setWorkspace(null);
+      }
+      setWorkspaceResolved(true);
+    });
+  }, [ownerAccount, workspace?.id, workspace?.ownerAccount]);
+
   const onConnectWallet = async () => {
     setWalletError(null);
     try {
@@ -169,6 +195,21 @@ export default function DashboardPage() {
     setWalletPermissionConfirmed(false);
   };
 
+  const onSetAgentStatus = async (status: 'active' | 'stopped') => {
+    if (!workspace || !ownerAccount) return;
+    setAgentStatusBusy(true);
+    setError(null);
+    try {
+      const updated = await api.setWorkspaceAgentStatus(workspace.id, status, ownerAccount);
+      activateWorkspace(updated);
+      setWorkspace(updated);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setAgentStatusBusy(false);
+    }
+  };
+
   const onApprove = async () => {
     const runId = workspaceRecommendation?.action === 'rebalance' ? workspaceRecommendation.runId : null;
     if (!runId || !workspace || !wallet) return;
@@ -191,6 +232,16 @@ export default function DashboardPage() {
     }
   };
 
+  const onToggleRunHistory = async (runId: string) => {
+    if (historyOpenId === runId) {
+      setHistoryOpenId(null);
+      return;
+    }
+    setHistoryOpenId(runId);
+    setHistoryDetail(null);
+    if (live) setHistoryDetail(await api.getRun(runId));
+  };
+
   if (!policy) {
     if (error) {
       return (
@@ -203,15 +254,32 @@ export default function DashboardPage() {
   }
 
   if (!workspaceResolved) return <PageLoader />;
+  if (!ownerAccount) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
+        <p className="eyebrow">Treasury control plane</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tightish text-ink-900">
+          Connect the treasury owner wallet
+        </h1>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">
+          Caliber only shows treasury workspaces associated with the connected wallet.
+        </p>
+        <button onClick={onConnectWallet} className="btn-primary mt-6">
+          Connect wallet
+        </button>
+        {walletError && <p className="mt-3 text-sm text-signal-rose">{walletError}</p>}
+      </div>
+    );
+  }
   if (!workspace) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
         <p className="eyebrow">Treasury control plane</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tightish text-ink-900">
-          Connect a treasury workspace
+          No treasury workspace for this wallet
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-slate-600">
-          Caliber requires a persisted workspace before it can run agents, apply policy, request approval, or write audit records.
+          Create a workspace with this wallet as owner before Caliber can monitor policy, request approval, or write audit records.
         </p>
         <Link href="/onboarding" className="btn-primary mt-6">
           Create workspace
@@ -220,8 +288,8 @@ export default function DashboardPage() {
     );
   }
 
-  const walletOwnsWorkspace =
-    wallet && (workspace.ownerAccount === wallet.accountHash || workspace.ownerAccount === wallet.publicKey);
+  const walletOwnsWorkspace = workspace.ownerAccount === ownerAccount;
+  const agentActive = workspace.agentStatus === 'active';
   const latestWorkspaceRun = workspaceRuns[0] ?? null;
   const currentDecision = workspaceRecommendation;
   const hasWorkspaceAnalysis = Boolean(latestWorkspaceRun);
@@ -260,7 +328,7 @@ export default function DashboardPage() {
     { label: 'Workspace', value: 'Active', active: true },
     { label: 'Policy', value: `${workspace.policy.maxRiskScore}/100 risk`, active: true },
     { label: 'Feed', value: signalFreshness.status, active: signalFreshness.active },
-    { label: 'Agent', value: hasWorkspaceAnalysis ? 'Decision recorded' : 'Monitoring policy', active: true },
+    { label: 'Agent', value: agentActive ? 'Monitoring policy' : 'Stopped', active: agentActive },
   ];
 
   return (
@@ -371,11 +439,20 @@ export default function DashboardPage() {
         <div className="grid gap-5">
           <section className="panel overflow-hidden">
             <div className="border-b border-slate-900/[0.06] bg-slate-50/60 px-5 py-3">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-semibold text-ink-900">Agent analysis</p>
-                <span className={`pill ${hasWorkspaceAnalysis ? 'border-brand-200 bg-brand-50 text-brand-600' : 'border-slate-200 bg-white text-slate-500'}`}>
-                  {hasWorkspaceAnalysis ? 'Analyzed' : 'Not analyzed'}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`pill ${hasWorkspaceAnalysis ? 'border-brand-200 bg-brand-50 text-brand-600' : 'border-slate-200 bg-white text-slate-500'}`}>
+                    {hasWorkspaceAnalysis ? 'Analyzed' : 'Not analyzed'}
+                  </span>
+                  <button
+                    onClick={() => setShowRunHistory((value) => !value)}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand-200 hover:text-brand-600"
+                    aria-expanded={showRunHistory}
+                  >
+                    {showRunHistory ? 'Hide run history' : 'Run history'}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -386,7 +463,9 @@ export default function DashboardPage() {
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600">
                   {currentDecision
                     ? currentDecision.explanation
-                    : 'The treasury policy is active. Caliber will show the latest agent decision here after the backend completes an analysis run for this workspace.'}
+                    : agentActive
+                      ? 'Caliber will show the latest agent decision here after the backend completes an analysis run for this workspace.'
+                      : 'Agent monitoring is stopped. Start agents when you want the backend to monitor this workspace every 10 minutes.'}
                 </p>
               </div>
               <div className="px-5 pb-5 sm:p-5 sm:pl-0">
@@ -519,13 +598,23 @@ export default function DashboardPage() {
               {currentDecision ? headline : 'No action pending'}
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-slate-600">
-              {currentDecision
+              {!agentActive
+                ? 'Agents are stopped for this workspace. Start monitoring when this treasury should be evaluated in the background.'
+                : currentDecision
                 ? currentDecision.action === 'rebalance'
                   ? 'Review the recommendation and approve only when you are ready to submit on-chain.'
                   : 'No on-chain approval is required for the latest decision.'
                 : 'No recommendation will appear here until an agent analysis has completed.'}
             </p>
-            {canApprove ? (
+            {!agentActive ? (
+              <button
+                onClick={() => void onSetAgentStatus('active')}
+                disabled={agentStatusBusy}
+                className="btn-primary mt-5 w-full shadow-pop disabled:opacity-40"
+              >
+                {agentStatusBusy ? 'Starting...' : 'Start agents'}
+              </button>
+            ) : canApprove ? (
               <button
                 onClick={onApprove}
                 disabled={busy}
@@ -544,14 +633,23 @@ export default function DashboardPage() {
             ) : (
               <div className="mt-5 rounded-xl border border-slate-900/[0.07] bg-slate-50 px-3 py-3">
                 <p className="text-sm font-semibold text-ink-900">
-                  {currentDecision ? 'No wallet action required' : 'Waiting for backend analysis'}
+                  {currentDecision ? 'No wallet action required' : 'Monitoring in background'}
                 </p>
                 <p className="mt-1 text-xs leading-relaxed text-slate-500">
                   {currentDecision
                     ? 'The latest decision does not require an on-chain approval.'
-                    : 'The agent runs in the backend. A recommendation will appear here only after a workspace-specific decision is available.'}
+                    : 'The backend checks active workspaces every minute and runs this workspace after its 10-minute interval has elapsed.'}
                 </p>
               </div>
+            )}
+            {agentActive && !canApprove && (
+              <button
+                onClick={() => void onSetAgentStatus('stopped')}
+                disabled={agentStatusBusy}
+                className="btn-ghost mt-3 w-full disabled:opacity-40"
+              >
+                {agentStatusBusy ? 'Stopping...' : 'Stop agents'}
+              </button>
             )}
             {!walletOwnsWorkspace && currentDecision?.action === 'rebalance' && (
               <p className="mt-3 text-xs text-slate-500">
@@ -612,6 +710,16 @@ export default function DashboardPage() {
           ) : null}
         </aside>
       </section>
+
+      {showRunHistory && (
+        <RunHistoryPanel
+          runs={workspaceRuns}
+          openId={historyOpenId}
+          detail={historyDetail}
+          live={live}
+          onToggle={onToggleRunHistory}
+        />
+      )}
     </div>
   );
 }
@@ -712,6 +820,192 @@ function AllocationGuardrail({ label, value }: { label: string; value: number })
       </div>
     </div>
   );
+}
+
+function RunHistoryPanel({
+  runs,
+  openId,
+  detail,
+  live,
+  onToggle,
+}: {
+  runs: AgentRunLog[];
+  openId: string | null;
+  detail: RunDetail | null;
+  live: boolean;
+  onToggle: (runId: string) => void | Promise<void>;
+}) {
+  const recentRuns = runs.slice(0, HISTORY_PAGE_SIZE);
+  return (
+    <section className="mt-5 panel overflow-hidden">
+      <div className="flex flex-col gap-3 border-b border-slate-900/[0.06] bg-slate-50/60 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="eyebrow">Run history</p>
+          <h2 className="mt-1 text-lg font-semibold text-ink-900">Recent agent activity</h2>
+        </div>
+        <span className="pill border-slate-200 bg-white text-slate-500">
+          {runs.length} run{runs.length === 1 ? '' : 's'}
+        </span>
+      </div>
+
+      {recentRuns.length === 0 ? (
+        <div className="px-5 py-10 text-center">
+          <p className="text-sm font-semibold text-ink-900">No runs yet</p>
+          <p className="mt-1 text-sm text-slate-500">
+            Start agents for this workspace and the backend will create the first run after the workspace interval.
+          </p>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-900/[0.06]">
+          {recentRuns.map((run) => {
+            const open = openId === run.id;
+            const loading = live && open && (!detail || detail.run.id !== run.id);
+            return (
+              <article key={run.id}>
+                <button
+                  onClick={() => void onToggle(run.id)}
+                  className="flex w-full flex-col gap-3 px-5 py-4 text-left transition hover:bg-slate-50/60 sm:flex-row sm:items-center sm:justify-between"
+                  aria-expanded={open}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Chevron open={open} />
+                    <ActionBadge action={run.action} />
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-xs font-medium text-slate-600">{run.id}</p>
+                      <p className="mt-0.5 text-xs text-slate-400">{formatDateTime(run.startedAt)}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 sm:shrink-0">
+                    <StatusPill status={run.status} />
+                    <span className="tnum text-sm font-semibold text-ink-900">
+                      Risk {run.riskScore ?? '-'}
+                    </span>
+                  </div>
+                </button>
+                {open && (
+                  <div className="border-t border-slate-900/[0.05] bg-slate-50/40 px-5 py-5">
+                    <InlineRunDetail run={run} detail={detail} loading={loading} />
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function InlineRunDetail({
+  run,
+  detail,
+  loading,
+}: {
+  run: AgentRunLog;
+  detail: RunDetail | null;
+  loading: boolean;
+}) {
+  const rec = detail?.recommendation;
+  const legs = rec?.rebalance?.legs ?? [];
+  const trace = rec?.trace ?? [];
+  if (loading) return <Spinner className="h-4 w-4" />;
+  return (
+    <div className="disclosure-panel grid gap-5 lg:grid-cols-2">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Decision rationale</p>
+        <p className="mt-2 text-sm leading-relaxed text-slate-600">
+          {rec?.explanation ?? run.notes ?? 'No reasoning recorded for this run.'}
+        </p>
+        {rec?.review && (
+          <p className={`mt-3 text-xs ${rec.review.approved ? 'text-signal-emerald' : 'text-signal-rose'}`}>
+            {AGENT_ROLES.reviewer.name}: {rec.review.approved ? 'approved' : 'vetoed'} ({rec.review.severity}) - {rec.review.concern}
+          </p>
+        )}
+      </div>
+
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Execution</p>
+        {legs.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">
+            No funds moved. Decision was <span className="font-medium">{run.action ?? 'hold'}</span>.
+          </p>
+        ) : (
+          <div className="mt-2 grid gap-2">
+            {legs.map((leg, index) => (
+              <div key={index} className="flex items-center gap-2 rounded-lg border border-slate-900/[0.06] bg-white p-2.5">
+                <Chip>{prettyAsset(leg.fromAssetId)}</Chip>
+                <span className="text-slate-400">-&gt;</span>
+                <Chip accent>{prettyAsset(leg.toAssetId)}</Chip>
+                <span className="ml-auto text-right">
+                  <span className="tnum block text-sm font-semibold text-ink-900">
+                    ${Number(leg.amount).toLocaleString()}
+                  </span>
+                  <span className="tnum text-xs text-slate-400">{(leg.weight * 100).toFixed(1)}%</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        {detail?.transaction?.deployHash && (
+          <a
+            href={`${EXPLORER}/transaction/${detail.transaction.deployHash}`}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-3 inline-flex font-mono text-xs text-brand-600 underline-offset-4 hover:underline"
+          >
+            View deploy {shortHash(detail.transaction.deployHash)}
+          </a>
+        )}
+      </div>
+
+      {trace.length > 0 && (
+        <div className="lg:col-span-2">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Run trace</p>
+          <TraceTimeline trace={trace} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ActionBadge({ action }: { action?: AgentRunLog['action'] }) {
+  if (!action) return <span className="text-slate-300">No decision</span>;
+  const map = {
+    hold: 'border-brand-200 bg-brand-50 text-brand-600',
+    rebalance: 'border-signal-amber/30 bg-amber-50 text-signal-amber',
+    halt: 'border-signal-rose/30 bg-rose-50 text-signal-rose',
+  } as const;
+  return <span className={`pill ${map[action]}`}>{action.toUpperCase()}</span>;
+}
+
+function StatusPill({ status }: { status: AgentRunLog['status'] }) {
+  const map: Record<AgentRunLog['status'], string> = {
+    completed: 'border-signal-emerald/30 bg-emerald-50 text-signal-emerald',
+    running: 'border-brand-200 bg-brand-50 text-brand-600',
+    rejected: 'border-signal-rose/30 bg-rose-50 text-signal-rose',
+    failed: 'border-signal-rose/30 bg-rose-50 text-signal-rose',
+  };
+  return <span className={`pill ${map[status]}`}>{status}</span>;
+}
+
+function Chip({ children, accent }: { children: React.ReactNode; accent?: boolean }) {
+  return (
+    <span className={`rounded-md px-2 py-1 text-xs font-medium ${accent ? 'bg-brand-50 text-brand-600' : 'bg-slate-100 text-slate-600'}`}>
+      {children}
+    </span>
+  );
+}
+
+function prettyAsset(id: string): string {
+  return id.replace(/[-_]/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function shortHash(hash: string): string {
+  return `${hash.slice(0, 8)}...${hash.slice(-6)}`;
+}
+
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString();
 }
 
 function formatUsd(value: number): string {

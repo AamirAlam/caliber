@@ -14,24 +14,25 @@ export function saveWorkspaces(nextWorkspaces: TreasuryWorkspace[]): void {
   const existing = listWorkspaces();
   const byId = new Map<string, TreasuryWorkspace>();
   for (const workspace of [...existing, ...nextWorkspaces]) {
-    byId.set(workspace.id, workspace);
+    byId.set(workspace.id, normalizeWorkspace(workspace));
   }
   const merged = [...byId.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
 }
 
 export function saveWorkspace(workspace: TreasuryWorkspace): void {
+  const normalized = normalizeWorkspace(workspace);
   const workspaces = listWorkspaces().filter((w) => w.id !== workspace.id);
-  workspaces.unshift(workspace);
+  workspaces.unshift(normalized);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(workspaces));
-  localStorage.setItem(ACTIVE_KEY, workspace.id);
+  localStorage.setItem(ACTIVE_KEY, normalized.id);
 }
 
 export function listWorkspaces(): TreasuryWorkspace[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as TreasuryWorkspace[]) : [];
+    return raw ? (JSON.parse(raw) as TreasuryWorkspace[]).map(normalizeWorkspace) : [];
   } catch {
     return [];
   }
@@ -47,4 +48,11 @@ export function getActiveWorkspace(): TreasuryWorkspace | null {
   const activeId = localStorage.getItem(ACTIVE_KEY);
   const workspaces = listWorkspaces();
   return workspaces.find((workspace) => workspace.id === activeId) ?? workspaces[0] ?? null;
+}
+
+function normalizeWorkspace(workspace: TreasuryWorkspace): TreasuryWorkspace {
+  return {
+    ...workspace,
+    agentStatus: workspace.agentStatus ?? 'stopped',
+  };
 }
