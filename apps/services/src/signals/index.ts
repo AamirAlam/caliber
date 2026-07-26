@@ -1,5 +1,6 @@
 import { SignalSchema, type Signal, type SignalSnapshot } from '@caliber/shared';
 import { config } from '../config.js';
+import { LiveChainSignalSource } from './live.js';
 
 export const REQUIRED_SIGNAL_KEYS = [
   'vault.liquidity.usd',
@@ -62,7 +63,8 @@ export class HttpSignalSource implements SignalSource {
 }
 
 export function buildSignalSources(): SignalSource[] {
-  return config.signals.feedUrl ? [new HttpSignalSource()] : [new OperatorSignalSource()];
+  const base: SignalSource = config.signals.feedUrl ? new HttpSignalSource() : new OperatorSignalSource();
+  return [base, new LiveChainSignalSource()];
 }
 
 export function buildOperatorSignalFeed(): { signals: Signal[] } {

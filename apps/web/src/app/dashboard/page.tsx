@@ -21,7 +21,8 @@ import {
 import type { WalletSession } from '@/lib/walletAuth';
 
 const EXPLORER = process.env.NEXT_PUBLIC_EXPLORER_BASE ?? 'https://testnet.cspr.live';
-const TOTAL_FUNDS_UNDER_MANAGEMENT_USD = 1_200_000;
+/** Fallback FUM (USD) shown when the feed carries no live `treasury.total.usd` signal. */
+const NOTIONAL_FUNDS_UNDER_MANAGEMENT_USD = 1_200_000;
 const HISTORY_PAGE_SIZE = 6;
 
 const BANDS = {
@@ -288,6 +289,7 @@ export default function DashboardPage() {
   const workspaceSignalFeedUrl =
     workspace.signals.mode === 'operator' ? managedSignalFeedUrl() : workspace.signals.feedUrl || 'External feed';
   const signalFreshness = feedFreshness(feedStatus?.capturedAt ?? snapshot?.capturedAt);
+  const liveTreasuryUsd = snapshot?.signals?.find((s) => s.key === 'treasury.total.usd')?.value;
   const latestRunStarted = latestWorkspaceRun ? new Date(latestWorkspaceRun.startedAt).toLocaleString() : null;
   const walletStatusLabel = wallet
     ? walletOwnsWorkspace
@@ -402,7 +404,11 @@ export default function DashboardPage() {
       </section>
 
       <section className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <DashboardStat label="Funds under management" value={formatUsd(TOTAL_FUNDS_UNDER_MANAGEMENT_USD)} detail="Policy notional" />
+        <DashboardStat
+          label="Funds under management"
+          value={formatUsd(liveTreasuryUsd ?? NOTIONAL_FUNDS_UNDER_MANAGEMENT_USD)}
+          detail={liveTreasuryUsd !== undefined ? 'On-chain balance × live CSPR price' : 'Policy notional (demo)'}
+        />
         <DashboardStat label="Policy mix" value={workspacePolicy} detail={`Risk ceiling ${workspace.policy.maxRiskScore}/100`} />
         <DashboardStat
           label="Feed"

@@ -1,9 +1,8 @@
 import type { Signal, SignalSnapshot, TreasuryPolicy, RebalanceRequest } from '@caliber/shared';
 
 /**
- * Notional total treasury value (USD). Current allocation weights are derived
- * from the liquidity signal against this constant until per-vault balance reads
- * are wired into the policy engine.
+ * Notional total treasury value (USD) — the fallback when the snapshot carries
+ * no live `treasury.total.usd` signal (demo/offline mode).
  */
 export const TOTAL_TREASURY_USD = 1_200_000;
 
@@ -12,10 +11,19 @@ export function getSignal(snapshot: SignalSnapshot, key: string): number | undef
   return snapshot.signals.find((s: Signal) => s.key === key)?.value;
 }
 
+/**
+ * Total treasury value (USD): the live on-chain-derived signal when present,
+ * otherwise the notional fallback. Deterministic given the snapshot.
+ */
+export function treasuryTotalUsd(snapshot: SignalSnapshot): number {
+  const live = getSignal(snapshot, 'treasury.total.usd');
+  return live !== undefined && live > 0 ? live : TOTAL_TREASURY_USD;
+}
+
 /** Current stablecoin/liquidity buffer as a fraction of the treasury. */
 export function liquidityBufferPct(snapshot: SignalSnapshot): number {
   const liquidity = getSignal(snapshot, 'vault.liquidity.usd') ?? 0;
-  return liquidity / TOTAL_TREASURY_USD;
+  return liquidity / treasuryTotalUsd(snapshot);
 }
 
 export interface AllocationWeight {

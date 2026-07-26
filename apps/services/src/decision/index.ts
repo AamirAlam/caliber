@@ -8,7 +8,7 @@ import type {
   TreasuryPolicy,
 } from '@caliber/shared';
 import { evaluatePolicy, type PolicyViolation } from '../policy/index.js';
-import { deriveAllocations, liquidityBufferPct, TOTAL_TREASURY_USD } from '../portfolio.js';
+import { deriveAllocations, liquidityBufferPct, treasuryTotalUsd } from '../portfolio.js';
 
 export interface DecisionInput {
   runId: string;
@@ -49,7 +49,7 @@ export function proposeRebalance(
       {
         fromAssetId: overweight.assetId,
         toAssetId: stable.assetId,
-        amount: String(Math.round(moveWeight * TOTAL_TREASURY_USD)),
+        amount: String(Math.round(moveWeight * treasuryTotalUsd(snapshot))),
         weight: moveWeight,
       },
     ],
@@ -135,12 +135,13 @@ export function knownAssetIds(policy: TreasuryPolicy): Set<string> {
 
 /**
  * Build a concrete RebalanceRequest from agent-proposed legs, converting each
- * weight into a USD/motes amount against the notional treasury size.
+ * weight into a USD/motes amount against the snapshot's treasury size.
  */
 export function buildRebalanceFromLegs(
   policy: TreasuryPolicy,
   runId: string,
   legs: { fromAssetId: string; toAssetId: string; weight: number }[],
+  snapshot: SignalSnapshot,
 ): RebalanceRequest {
   return {
     id: `reb_${runId}`,
@@ -149,7 +150,7 @@ export function buildRebalanceFromLegs(
       fromAssetId: l.fromAssetId,
       toAssetId: l.toAssetId,
       weight: l.weight,
-      amount: String(Math.round(l.weight * TOTAL_TREASURY_USD)),
+      amount: String(Math.round(l.weight * treasuryTotalUsd(snapshot))),
     })),
     createdAt: new Date().toISOString(),
   };

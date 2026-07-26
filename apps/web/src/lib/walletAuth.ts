@@ -33,6 +33,15 @@ export function hasWalletSession(req: NextRequest): boolean {
   return readWalletSession(req) !== null;
 }
 
+/** HMAC over a challenge payload so the server can verify it issued the challenge. */
+export function challengeMac(payload: string): string {
+  return sign(payload);
+}
+
+export function challengeMacEquals(payload: string, mac: string): boolean {
+  return constantEquals(mac, sign(payload));
+}
+
 function sign(payload: string): string {
   return createHmac('sha256', walletSecret()).update(payload).digest('base64url');
 }

@@ -222,7 +222,7 @@ export async function runDeliberation(
     }
 
     // Passed the gate → adversarial Risk-Reviewer panel.
-    const rebalance = buildRebalanceFromLegs(policy, input.runId, legs);
+    const rebalance = buildRebalanceFromLegs(policy, input.runId, legs, snapshot);
     lastReview = await review({ policy, risk, snapshot, rebalance, rationale });
     toolTrace.push('risk_review');
     add({
@@ -316,7 +316,7 @@ function gateRebalance(
       violations.push({ constraint: 'unknownAsset', detail: `Unknown asset ${l.fromAssetId}/${l.toAssetId}.` });
     }
   }
-  violations.push(...evaluatePolicy(policy, risk, snapshot, buildRebalanceFromLegs(policy, runId, legs)));
+  violations.push(...evaluatePolicy(policy, risk, snapshot, buildRebalanceFromLegs(policy, runId, legs, snapshot)));
   return violations;
 }
 

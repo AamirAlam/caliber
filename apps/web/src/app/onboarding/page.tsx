@@ -93,7 +93,7 @@ export default function OnboardingPage() {
   const [nativeTarget, setNativeTarget] = useState(10);
   const [riskLimit, setRiskLimit] = useState(70);
   const [policyPreset, setPolicyPreset] = useState<PolicyPresetId>('balanced');
-  const [sourceMode, setSourceMode] = useState<SourceMode>('operator');
+  const sourceMode: SourceMode = 'operator';
   const [feedStatus, setFeedStatus] = useState<FeedStatus | null>(null);
   const [activating, setActivating] = useState(false);
   const [activationError, setActivationError] = useState<string | null>(null);
@@ -354,16 +354,8 @@ export default function OnboardingPage() {
             {step === 3 && (
               <SetupBlock
                 title="Choose signal sources"
-                description="Use the self managed feed running on the Caliber backend, or point this treasury at an external signal feed."
+                description="This treasury uses the self managed feed running on the Caliber backend, augmented with live on-chain balance and CSPR price signals when configured."
               >
-                <Segmented
-                  value={sourceMode}
-                  onChange={setSourceMode}
-                  options={[
-                    { value: 'operator', label: 'Self managed' },
-                    { value: 'external', label: 'External feed URL' },
-                  ]}
-                />
                 {sourceMode === 'operator' && (
                   <div className="rounded-xl border border-slate-900/[0.07] bg-slate-50 p-4">
                     <div className="flex items-center gap-2">
@@ -381,14 +373,6 @@ export default function OnboardingPage() {
                       {managedFeedUrl}
                     </a>
                     <p className="mt-2 text-xs text-slate-500">{managedFeedFreshness.label}</p>
-                  </div>
-                )}
-                {sourceMode === 'external' && (
-                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5">
-                    <p className="text-sm font-semibold text-ink-900">External feeds are coming soon</p>
-                    <p className="mt-1 text-sm leading-relaxed text-slate-500">
-                      Self managed Caliber backend signals are available now. Custom external feed onboarding will be enabled after provider validation and monitoring controls are ready.
-                    </p>
                   </div>
                 )}
               </SetupBlock>
@@ -589,28 +573,3 @@ function Allocation({
   );
 }
 
-function Segmented<T extends string>({
-  value,
-  onChange,
-  options,
-}: {
-  value: T;
-  onChange: (value: T) => void;
-  options: Array<{ value: T; label: string }>;
-}) {
-  return (
-    <div className="grid gap-2 rounded-xl bg-slate-100 p-1 sm:grid-cols-2">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          onClick={() => onChange(option.value)}
-          className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
-            option.value === value ? 'bg-white text-ink-900 shadow-soft' : 'text-slate-500 hover:text-slate-700'
-          }`}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  );
-}

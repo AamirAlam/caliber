@@ -112,6 +112,17 @@ export async function readVaultState(): Promise<VaultState> {
   }
 }
 
+/**
+ * Read the liquid CSPR balance (in motes) of an account's main purse. Throws on
+ * RPC failure — callers decide whether the read is optional.
+ */
+export async function readAccountCsprMotes(publicKeyHex: string): Promise<bigint> {
+  const result = await rpc('query_balance', {
+    purse_identifier: { main_purse_under_public_key: publicKeyHex },
+  });
+  return BigInt(result.balance);
+}
+
 let lastRead: { at: number; value: VaultState } | null = null;
 
 /** Cached read (default 8s TTL) so polling the dashboard doesn't hammer the node. */
