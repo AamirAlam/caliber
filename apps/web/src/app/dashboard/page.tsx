@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { AGENT_ROLES } from '@caliber/shared';
 import type { AgentRunLog, Recommendation, RiskScore, SignalSnapshot, TraceStep, TreasuryPolicy } from '@caliber/shared';
 import { api, type FeedStatus, type RunDetail, type VaultState } from '@/lib/api';
@@ -43,6 +44,17 @@ const BANDS = {
 } as const;
 
 export default function DashboardPage() {
+  // useSearchParams requires a Suspense boundary during prerender.
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <DashboardPageInner />
+    </Suspense>
+  );
+}
+
+function DashboardPageInner() {
+  const searchParams = useSearchParams();
+  const workspaceParam = searchParams.get('workspace');
   const [policy, setPolicy] = useState<TreasuryPolicy | null>(null);
   const [workspace, setWorkspace] = useState<TreasuryWorkspace | null>(null);
   const [workspaceResolved, setWorkspaceResolved] = useState(false);
@@ -128,19 +140,6 @@ export default function DashboardPage() {
       setWalletPermissionConfirmed(true);
       setWalletError(null);
     });
-    const workspaceId = new URLSearchParams(window.location.search).get('workspace');
-    const localWorkspace = getWorkspace(workspaceId);
-    setWorkspace(localWorkspace);
-    setWorkspaceResolved(Boolean(localWorkspace) || !workspaceId);
-    if (workspaceId && !localWorkspace) {
-      void api.getWorkspace(workspaceId).then((remoteWorkspace) => {
-        if (remoteWorkspace) {
-          activateWorkspace(remoteWorkspace);
-          setWorkspace(remoteWorkspace);
-        }
-        setWorkspaceResolved(true);
-      });
-    }
     void loadWalletSession()
       .then((session) => {
         setWallet(session);
@@ -160,6 +159,37 @@ export default function DashboardPage() {
       clearInterval(feedStatusInterval);
     };
   }, [refresh]);
+
+  // Re-resolve whenever the ?workspace= param changes (treasury switcher uses
+  // client-side navigation, so the page never remounts).
+  useEffect(() => {
+    let cancelled = false;
+    const localWorkspace = getWorkspace(workspaceParam);
+    setWorkspace(localWorkspace);
+    setWorkspaceResolved(Boolean(localWorkspace) || !workspaceParam);
+    // Clear per-treasury state so the previous treasury's data never bleeds over.
+    setWorkspaceRuns([]);
+    setWorkspaceRecommendation(null);
+    setDeployHash(null);
+    setHistoryOpenId(null);
+    setHistoryDetail(null);
+    setPolicyDraft(null);
+    setPolicyError(null);
+    setError(null);
+    if (workspaceParam && !localWorkspace) {
+      void api.getWorkspace(workspaceParam).then((remoteWorkspace) => {
+        if (cancelled) return;
+        if (remoteWorkspace) {
+          activateWorkspace(remoteWorkspace);
+          setWorkspace(remoteWorkspace);
+        }
+        setWorkspaceResolved(true);
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceParam]);
 
   const ownerAccount = wallet?.accountHash ?? connectedAddress;
 
