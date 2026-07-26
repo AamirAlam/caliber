@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import type { TreasuryWorkspace } from '@caliber/shared';
 import { api } from '@/lib/api';
 import {
@@ -77,9 +78,19 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
     return (
       <div className={compact ? 'px-4 py-2' : 'px-3 pb-3'}>
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-          Workspace
+          Treasury
         </p>
-        <p className="mt-1 truncate text-sm font-medium text-slate-700">No treasury connected</p>
+        <p className="mt-1 truncate text-sm font-medium text-slate-700">
+          {ownerAccount ? 'No workspace yet' : 'Connect owner wallet'}
+        </p>
+        {ownerAccount && (
+          <Link
+            href="/onboarding"
+            className="mt-2 inline-flex rounded-lg border border-slate-900/10 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand-200 hover:text-brand-600"
+          >
+            Create treasury
+          </Link>
+        )}
       </div>
     );
   }
@@ -87,7 +98,7 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
   return (
     <label className={compact ? 'block px-4 py-2' : 'block px-3 pb-3'}>
       <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-        Workspace
+        Treasury
       </span>
       <select
         value={active?.id ?? ''}
@@ -100,6 +111,12 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
           </option>
         ))}
       </select>
+      <Link
+        href="/onboarding"
+        className="mt-2 inline-flex text-xs font-semibold text-brand-600 underline-offset-4 hover:underline"
+      >
+        Add another treasury
+      </Link>
     </label>
   );
 }

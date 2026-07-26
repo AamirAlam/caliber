@@ -256,35 +256,16 @@ export default function DashboardPage() {
   if (!workspaceResolved) return <PageLoader />;
   if (!ownerAccount) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
-        <p className="eyebrow">Treasury control plane</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tightish text-ink-900">
-          Connect the treasury owner wallet
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600">
-          Caliber only shows treasury workspaces associated with the connected wallet.
-        </p>
-        <button onClick={onConnectWallet} className="btn-primary mt-6">
-          Connect wallet
-        </button>
-        {walletError && <p className="mt-3 text-sm text-signal-rose">{walletError}</p>}
-      </div>
+      <TreasuryAccessEmptyState
+        walletError={walletError}
+        onConnectWallet={onConnectWallet}
+        hasWalletProvider={hasWalletProvider()}
+      />
     );
   }
   if (!workspace) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
-        <p className="eyebrow">Treasury control plane</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tightish text-ink-900">
-          No treasury workspace for this wallet
-        </h1>
-        <p className="mt-2 text-sm leading-relaxed text-slate-600">
-          Create a workspace with this wallet as owner before Caliber can monitor policy, request approval, or write audit records.
-        </p>
-        <Link href="/onboarding" className="btn-primary mt-6">
-          Create workspace
-        </Link>
-      </div>
+      <TreasuryWorkspaceEmptyState ownerAccount={ownerAccount} onDisconnectWallet={onDisconnectWallet} />
     );
   }
 
@@ -722,6 +703,125 @@ export default function DashboardPage() {
       )}
     </div>
   );
+}
+
+function TreasuryAccessEmptyState({
+  walletError,
+  onConnectWallet,
+  hasWalletProvider,
+}: {
+  walletError: string | null;
+  onConnectWallet: () => void | Promise<void>;
+  hasWalletProvider: boolean;
+}) {
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-8 pb-28 sm:px-6 lg:px-8 lg:py-10 lg:pb-10">
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="rounded-2xl border border-slate-900/[0.07] bg-white p-6 shadow-card sm:p-8">
+          <p className="eyebrow">Treasury access</p>
+          <h1 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tightish text-ink-900">
+            Connect the DAO treasury owner wallet
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
+            Caliber scopes every treasury workspace to the connected owner wallet. After connection, you can create or open that wallet&apos;s treasury workspace, configure policy, and start background monitoring.
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button onClick={onConnectWallet} className="btn-primary w-full sm:w-auto">
+              Connect owner wallet
+            </button>
+            <span className="text-xs text-slate-500">No treasury data is shown before wallet ownership is known.</span>
+          </div>
+          {walletError && <p className="mt-3 text-sm text-signal-rose">{walletError}</p>}
+          {!hasWalletProvider && (
+            <p className="mt-3 rounded-lg border border-slate-900/[0.07] bg-slate-50 px-3 py-2 text-xs text-slate-500">
+              Install or unlock a Casper wallet extension to operate a treasury workspace.
+            </p>
+          )}
+        </div>
+
+        <TreasuryOperatingModel />
+      </section>
+    </div>
+  );
+}
+
+function TreasuryWorkspaceEmptyState({
+  ownerAccount,
+  onDisconnectWallet,
+}: {
+  ownerAccount: string;
+  onDisconnectWallet: () => void | Promise<void>;
+}) {
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-8 pb-28 sm:px-6 lg:px-8 lg:py-10 lg:pb-10">
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="rounded-2xl border border-slate-900/[0.07] bg-white p-6 shadow-card sm:p-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="eyebrow">Treasury setup</p>
+              <h1 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tightish text-ink-900">
+                Create a treasury workspace for this wallet
+              </h1>
+            </div>
+            <span className="pill border-signal-emerald/30 bg-emerald-50 font-mono text-signal-emerald">
+              {shortDisplay(ownerAccount)}
+            </span>
+          </div>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
+            A workspace binds the DAO owner wallet, Casper vault, policy limits, signal feed, run history, and approval records into one operational view.
+          </p>
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Link href="/onboarding" className="btn-primary w-full sm:w-auto">
+              Create treasury workspace
+            </Link>
+            <button onClick={onDisconnectWallet} className="btn-ghost w-full sm:w-auto">
+              Switch wallet
+            </button>
+          </div>
+        </div>
+
+        <TreasuryOperatingModel />
+      </section>
+    </div>
+  );
+}
+
+function TreasuryOperatingModel() {
+  const items = [
+    {
+      label: 'Owner wallet',
+      detail: 'Identifies the DAO account that can view this workspace and approve execution.',
+    },
+    {
+      label: 'Policy guardrails',
+      detail: 'Defines allocation targets, risk limits, and how much the agent can recommend moving.',
+    },
+    {
+      label: 'Background monitoring',
+      detail: 'Active workspaces are checked by the backend on the configured interval.',
+    },
+    {
+      label: 'Approval trail',
+      detail: 'Recommended on-chain actions wait for wallet approval and stay visible in run history.',
+    },
+  ];
+  return (
+    <aside className="rounded-2xl border border-slate-900/[0.07] bg-slate-50 p-5">
+      <p className="eyebrow">How Caliber operates</p>
+      <div className="mt-4 grid gap-3">
+        {items.map((item) => (
+          <div key={item.label} className="rounded-xl border border-slate-900/[0.06] bg-white p-3">
+            <p className="text-sm font-semibold text-ink-900">{item.label}</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">{item.detail}</p>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function shortDisplay(value: string): string {
+  return value.length > 18 ? `${value.slice(0, 10)}...${value.slice(-8)}` : value;
 }
 
 function RiskGauge({ score, band }: { score: number; band: RiskScore['band'] }) {

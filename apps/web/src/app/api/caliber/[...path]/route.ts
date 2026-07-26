@@ -5,6 +5,11 @@ export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const DEFAULT_SERVICES_URL = 'http://localhost:4000';
+const OPTIONAL_DASHBOARD_READS = new Set([
+  'signals/latest',
+  'risk/latest',
+  'recommendation/latest',
+]);
 
 function servicesBaseUrl(): string {
   const base =
@@ -50,6 +55,9 @@ async function forward(req: NextRequest, path: string[]): Promise<NextResponse> 
 
   try {
     const upstream = await fetch(targetUrl(path, req), init);
+    if (req.method === 'GET' && upstream.status === 404 && OPTIONAL_DASHBOARD_READS.has(route)) {
+      return NextResponse.json(null);
+    }
     const body = await upstream.arrayBuffer();
     const responseHeaders = new Headers(upstream.headers);
     responseHeaders.delete('content-encoding');
