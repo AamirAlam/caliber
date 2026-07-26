@@ -716,30 +716,64 @@ function TreasuryAccessEmptyState({
 }) {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 pb-28 sm:px-6 lg:px-8 lg:py-10 lg:pb-10">
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="rounded-2xl border border-slate-900/[0.07] bg-white p-6 shadow-card sm:p-8">
-          <p className="eyebrow">Treasury access</p>
-          <h1 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tightish text-ink-900">
-            Connect the DAO treasury owner wallet
-          </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">
-            Caliber scopes every treasury workspace to the connected owner wallet. After connection, you can create or open that wallet&apos;s treasury workspace, configure policy, and start background monitoring.
-          </p>
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <button onClick={onConnectWallet} className="btn-primary w-full sm:w-auto">
+      <header className="max-w-2xl">
+        <p className="eyebrow">Treasury workspace</p>
+        <h1 className="mt-3 text-3xl font-semibold tracking-tightish text-ink-900">
+          Start with a new treasury or open an existing one
+        </h1>
+        <p className="mt-3 text-sm leading-relaxed text-slate-600">
+          New DAO operators can configure a treasury first and connect the owner wallet at activation. Existing operators can connect the owner wallet to load workspaces already associated with that account.
+        </p>
+      </header>
+
+      <section className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <article className="rounded-2xl border border-brand-200 bg-white p-5 shadow-card">
+            <p className="eyebrow text-brand-600">New treasury</p>
+            <h2 className="mt-3 text-xl font-semibold text-ink-900">Create a fresh workspace</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Set the DAO vault, choose policy guardrails, select the managed signal feed, then connect the owner wallet only when you activate.
+            </p>
+            <Link href="/onboarding" className="btn-primary mt-5 w-full">
+              Create treasury
+            </Link>
+          </article>
+
+          <article className="rounded-2xl border border-slate-900/[0.07] bg-white p-5 shadow-card">
+            <p className="eyebrow">Existing treasury</p>
+            <h2 className="mt-3 text-xl font-semibold text-ink-900">Open by owner wallet</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Connect the wallet that owns the treasury workspace. Caliber will show only workspaces tied to that account.
+            </p>
+            <button onClick={onConnectWallet} className="btn-ghost mt-5 w-full">
               Connect owner wallet
             </button>
-            <span className="text-xs text-slate-500">No treasury data is shown before wallet ownership is known.</span>
-          </div>
-          {walletError && <p className="mt-3 text-sm text-signal-rose">{walletError}</p>}
-          {!hasWalletProvider && (
-            <p className="mt-3 rounded-lg border border-slate-900/[0.07] bg-slate-50 px-3 py-2 text-xs text-slate-500">
-              Install or unlock a Casper wallet extension to operate a treasury workspace.
-            </p>
-          )}
+            {walletError && <p className="mt-3 text-sm text-signal-rose">{walletError}</p>}
+            {!hasWalletProvider && (
+              <p className="mt-3 rounded-lg border border-slate-900/[0.07] bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                Install or unlock a Casper wallet extension to open an existing treasury.
+              </p>
+            )}
+          </article>
         </div>
 
         <TreasuryOperatingModel />
+      </section>
+
+      <section className="mt-5 rounded-2xl border border-slate-900/[0.07] bg-white p-5 shadow-sm">
+        <div className="grid gap-3 sm:grid-cols-4">
+          {[
+            ['Configure', 'Treasury name, vault, and ownership'],
+            ['Set Policy', 'Allocation targets and risk ceiling'],
+            ['Activate', 'Connect wallet and create workspace'],
+            ['Monitor', 'Start agents and review actions'],
+          ].map(([label, detail]) => (
+            <div key={label} className="rounded-xl bg-slate-50 px-3 py-3">
+              <p className="text-sm font-semibold text-ink-900">{label}</p>
+              <p className="mt-1 text-xs leading-relaxed text-slate-500">{detail}</p>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );

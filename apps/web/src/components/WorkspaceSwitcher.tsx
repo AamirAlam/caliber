@@ -81,16 +81,14 @@ export function WorkspaceSwitcher({ compact = false }: { compact?: boolean }) {
           Treasury
         </p>
         <p className="mt-1 truncate text-sm font-medium text-slate-700">
-          {ownerAccount ? 'No workspace yet' : 'Connect owner wallet'}
+          {ownerAccount ? 'No workspace yet' : 'No treasury selected'}
         </p>
-        {ownerAccount && (
-          <Link
-            href="/onboarding"
-            className="mt-2 inline-flex rounded-lg border border-slate-900/10 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand-200 hover:text-brand-600"
-          >
-            Create treasury
-          </Link>
-        )}
+        <Link
+          href="/onboarding"
+          className="mt-2 inline-flex rounded-lg border border-slate-900/10 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand-200 hover:text-brand-600"
+        >
+          Create treasury
+        </Link>
       </div>
     );
   }
