@@ -45,23 +45,40 @@ export async function connectWalletProvider(): Promise<string | null> {
   if (publicKeyFromConnection) return publicKeyFromConnection;
   const connected = await readConnected(provider, connection);
   if (!connected) throw new Error('Wallet connection was not approved.');
-  const publicKeyFromProvider = await pollActivePublicKey(providers, 2, 300);
-  if (publicKeyFromProvider) return publicKeyFromProvider;
-  // getActivePublicKey throws "Cannot get active account" when the wallet is
-  // locked or when the wallet's active account is not the one approved for this
-  // site. requestSwitchAccount opens the wallet UI so the user can activate an
-  // approved account; the ActiveKeyChanged/Unlocked events then carry the key.
+  const publicKeyFromRace = await firstPublicKey([
+    pollActivePublicKey(providers, 6, 500),
+    eventPublicKey ?? Promise.resolve(null),
+  ]);
+  if (publicKeyFromRace) return publicKeyFromRace;
+  // getActivePublicKey fails when the wallet is locked or when the wallet's
+  // active account is not the one approved for this site. requestSwitchAccount
+  // opens the wallet UI so the user can activate an approved account; the
+  // ActiveKeyChanged/Unlocked events then carry the key.
   const switcher = providers.find((item) => item.requestSwitchAccount);
   if (switcher?.requestSwitchAccount) {
+    const eventAfterSwitch = waitForConnectedPublicKey();
     try {
       await switcher.requestSwitchAccount();
     } catch {
       // User dismissed the switch UI — fall through to the event/poll race.
     }
+    return firstPublicKey([
+      pollActivePublicKey(providers, 6, 500),
+      eventAfterSwitch ?? Promise.resolve(null),
+    ]);
   }
-  return firstPublicKey([
-    pollActivePublicKey(providers, 10, 500),
-    eventPublicKey ?? Promise.resolve(null),
+  return null;
+}
+
+/**
+ * Race a wallet SDK promise against a timeout. Casper Wallet 2.x can leave
+ * requests permanently pending (the content script throws internally instead of
+ * rejecting), so no provider read may ever be awaited unguarded.
+ */
+function settleWithin<T>(promise: Promise<T> | T, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise).catch(() => fallback),
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
   ]);
 }
 
@@ -92,12 +109,13 @@ async function pollActivePublicKey(
     if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
     for (const provider of providers) {
       if (!provider.getActivePublicKey) continue;
-      try {
-        const publicKey = normalizePublicKey(await provider.getActivePublicKey());
-        if (publicKey) return publicKey;
-      } catch {
-        // Locked or account not yet active — retry on the next tick.
-      }
+      const result = await settleWithin(
+        Promise.resolve(provider.getActivePublicKey()),
+        1500,
+        null as unknown,
+      );
+      const publicKey = normalizePublicKey(result);
+      if (publicKey) return publicKey;
     }
   }
   return null;
@@ -212,7 +230,8 @@ function waitForConnectedPublicKey(): Promise<string | null> | null {
     };
 
     addWalletEventListeners(onWalletEvent);
-    timeout = setTimeout(() => finish(null), 10_000);
+    // Generous window: wallet approval popups routinely take longer than 10s.
+    timeout = setTimeout(() => finish(null), 60_000);
   });
 }
 
@@ -252,7 +271,11 @@ async function readConnected(provider: CasperWalletLike, connection: unknown): P
   if (connection && typeof connection === 'object' && 'connected' in connection) {
     return Boolean((connection as { connected?: unknown }).connected);
   }
-  if (provider.isConnected) return Boolean(await provider.isConnected());
+  if (provider.isConnected) {
+    // isConnected can hang like the other reads; assume connected on timeout
+    // since requestConnection already resolved without rejecting.
+    return Boolean(await settleWithin(Promise.resolve(provider.isConnected()), 1500, true));
+  }
   return true;
 }
 

@@ -16,7 +16,8 @@ function servicesBaseUrl(): string {
     process.env.SERVICES_URL ??
     process.env.NEXT_PUBLIC_SERVICES_URL ??
     DEFAULT_SERVICES_URL;
-  return base.replace(/\/+$/, '');
+  const withProtocol = /^https?:\/\//.test(base) ? base : `http://${base}`;
+  return withProtocol.replace(/\/+$/, '');
 }
 
 function targetUrl(path: string[], req: NextRequest): string {
