@@ -189,7 +189,7 @@ export default function DashboardPage() {
       const publicKey = connectedAddress ?? manualAddress.trim();
       if (publicKey) {
         setConnectedAddress(publicKey);
-        setWallet(await authenticateWallet(publicKey));
+        setWallet(await authenticateWallet(publicKey, { trySign: publicKey === connectedAddress }));
         return;
       }
       const connectedPublicKey = await connectWalletProvider();
@@ -202,6 +202,18 @@ export default function DashboardPage() {
       setWallet(await authenticateWallet(connectedPublicKey));
     } catch (error) {
       setWalletPermissionConfirmed(true);
+      setWalletError(String(error));
+    }
+  };
+
+  const onUseManualAddress = async () => {
+    const publicKey = manualAddress.trim();
+    if (!publicKey) return;
+    setWalletError(null);
+    try {
+      setConnectedAddress(publicKey);
+      setWallet(await authenticateWallet(publicKey, { trySign: false }));
+    } catch (error) {
       setWalletError(String(error));
     }
   };
@@ -313,6 +325,9 @@ export default function DashboardPage() {
         walletError={walletError}
         onConnectWallet={onConnectWallet}
         hasWalletProvider={hasWalletProvider()}
+        manualAddress={manualAddress}
+        onManualAddressChange={setManualAddress}
+        onUseManualAddress={onUseManualAddress}
       />
     );
   }
@@ -855,10 +870,16 @@ function TreasuryAccessEmptyState({
   walletError,
   onConnectWallet,
   hasWalletProvider,
+  manualAddress,
+  onManualAddressChange,
+  onUseManualAddress,
 }: {
   walletError: string | null;
   onConnectWallet: () => void | Promise<void>;
   hasWalletProvider: boolean;
+  manualAddress: string;
+  onManualAddressChange: (value: string) => void;
+  onUseManualAddress: () => void | Promise<void>;
 }) {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 pb-28 sm:px-6 lg:px-8 lg:py-10 lg:pb-10">
@@ -894,6 +915,21 @@ function TreasuryAccessEmptyState({
             <button onClick={onConnectWallet} className="btn-ghost mt-5 w-full">
               Connect owner wallet
             </button>
+            <div className="mt-3 flex gap-2">
+              <input
+                className="input flex-1 font-mono text-xs"
+                value={manualAddress}
+                onChange={(event) => onManualAddressChange(event.target.value)}
+                placeholder="Or paste owner public key (01... / 02...)"
+              />
+              <button
+                onClick={onUseManualAddress}
+                disabled={!manualAddress.trim()}
+                className="btn-ghost disabled:opacity-40"
+              >
+                Use key
+              </button>
+            </div>
             {walletError && <p className="mt-3 text-sm text-signal-rose">{walletError}</p>}
             {!hasWalletProvider && (
               <p className="mt-3 rounded-lg border border-slate-900/[0.07] bg-slate-50 px-3 py-2 text-xs text-slate-500">

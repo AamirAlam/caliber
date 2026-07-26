@@ -185,7 +185,7 @@ export default function OnboardingPage() {
       const publicKey = connectedAddress ?? manualAddress.trim();
       if (publicKey) {
         setConnectedAddress(publicKey);
-        setWallet(await authenticateWallet(publicKey));
+        setWallet(await authenticateWallet(publicKey, { trySign: publicKey === connectedAddress }));
         return;
       }
       const connectedPublicKey = await connectWalletProvider();

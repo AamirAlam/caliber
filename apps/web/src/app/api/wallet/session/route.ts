@@ -52,20 +52,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     signature?: string;
   };
   const { publicKey, nonce, issuedAt, mac, signature } = body;
-  if (!publicKey || !nonce || !issuedAt || !mac || !signature) {
-    return NextResponse.json({ error: 'signed wallet challenge required' }, { status: 400 });
+  if (!publicKey || !isCasperPublicKeyHex(publicKey)) {
+    return NextResponse.json({ error: 'valid Casper public key required' }, { status: 400 });
   }
-  if (!challengeMacEquals(challengePayload(publicKey, nonce, issuedAt), mac)) {
-    return NextResponse.json({ error: 'invalid challenge' }, { status: 403 });
+  if (signature && nonce && issuedAt && mac) {
+    // Signed challenge path (preferred): prove key ownership.
+    if (!challengeMacEquals(challengePayload(publicKey, nonce, issuedAt), mac)) {
+      return NextResponse.json({ error: 'invalid challenge' }, { status: 403 });
+    }
+    const age = Date.now() - Date.parse(issuedAt);
+    if (!Number.isFinite(age) || age < 0 || age > CHALLENGE_MAX_AGE_MS) {
+      return NextResponse.json({ error: 'challenge expired' }, { status: 403 });
+    }
+    const message = walletSessionMessage(publicKey, nonce, issuedAt);
+    if (!verifyWalletSignature(publicKey, message, signature)) {
+      return NextResponse.json({ error: 'signature verification failed' }, { status: 403 });
+    }
   }
-  const age = Date.now() - Date.parse(issuedAt);
-  if (!Number.isFinite(age) || age < 0 || age > CHALLENGE_MAX_AGE_MS) {
-    return NextResponse.json({ error: 'challenge expired' }, { status: 403 });
-  }
-  const message = walletSessionMessage(publicKey, nonce, issuedAt);
-  if (!verifyWalletSignature(publicKey, message, signature)) {
-    return NextResponse.json({ error: 'signature verification failed' }, { status: 403 });
-  }
+  // Without a signature the session is unverified: enough to browse workspaces,
+  // while approvals still require a real wallet signature server-side.
 
   const wallet: WalletSession = {
     accountHash: publicKey,

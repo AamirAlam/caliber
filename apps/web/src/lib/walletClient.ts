@@ -127,42 +127,63 @@ export async function connectWallet(): Promise<WalletSession> {
   return authenticateWallet(publicKey);
 }
 
-export async function authenticateWallet(publicKey: string): Promise<WalletSession> {
+export async function authenticateWallet(
+  publicKey: string,
+  options?: { trySign?: boolean },
+): Promise<WalletSession> {
   const trimmedPublicKey = normalizePublicKey(publicKey);
   if (!trimmedPublicKey) {
     throw new Error('Wallet public key is required before authentication.');
   }
-  const providers = getProviders();
-  if (providers.length === 0) {
-    throw new Error('Casper wallet extension is required to sign in.');
-  }
-  const challengeRes = await fetch('/api/wallet/session', {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ publicKey: trimmedPublicKey }),
-  });
-  if (!challengeRes.ok) throw new Error('Wallet sign-in challenge could not be created.');
-  const challenge = (await challengeRes.json()) as {
-    message: string;
-    nonce: string;
-    issuedAt: string;
-    mac: string;
-  };
-  const signature = await signWalletMessage(providers, challenge.message, trimmedPublicKey);
+  // Manual-entry sessions skip the wallet entirely: a wedged extension must
+  // never block the pasted-key workaround.
+  const signedBody = options?.trySign === false ? null : await signSessionChallenge(trimmedPublicKey);
   const res = await fetch('/api/wallet/session', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      publicKey: trimmedPublicKey,
-      nonce: challenge.nonce,
-      issuedAt: challenge.issuedAt,
-      mac: challenge.mac,
-      signature,
-    }),
+    body: JSON.stringify(signedBody ?? { publicKey: trimmedPublicKey }),
   });
   if (!res.ok) throw new Error('Wallet session could not be created.');
   const body = (await res.json()) as { wallet: WalletSession };
   return body.wallet;
+}
+
+/**
+ * Try the signed sign-in challenge (proves key ownership). Returns null when
+ * the extension is unavailable or won't sign, so the caller can fall back to an
+ * unverified session — approvals still require a real signature later.
+ */
+async function signSessionChallenge(publicKey: string): Promise<Record<string, string> | null> {
+  const providers = getProviders();
+  if (providers.length === 0) return null;
+  // Liveness probe: a wedged extension leaves requests pending forever; only
+  // attempt the signature when the wallet answers within the guard window.
+  const alive = await pollActivePublicKey(providers, 1, 0);
+  if (!alive) return null;
+  try {
+    const challengeRes = await fetch('/api/wallet/session', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ publicKey }),
+    });
+    if (!challengeRes.ok) return null;
+    const challenge = (await challengeRes.json()) as {
+      message: string;
+      nonce: string;
+      issuedAt: string;
+      mac: string;
+    };
+    const signature = await signWalletMessage(providers, challenge.message, publicKey);
+    return {
+      publicKey,
+      nonce: challenge.nonce,
+      issuedAt: challenge.issuedAt,
+      mac: challenge.mac,
+      signature,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function disconnectWallet(): Promise<void> {
