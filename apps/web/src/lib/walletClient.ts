@@ -44,22 +44,47 @@ export async function connectWalletProvider(): Promise<string | null> {
   if (publicKeyFromConnection) return publicKeyFromConnection;
   const connected = await readConnected(provider, connection);
   if (!connected) throw new Error('Wallet connection was not approved.');
-  const publicKeyFromProvider = await readActivePublicKey(providers);
-  if (publicKeyFromProvider) return publicKeyFromProvider;
-  const publicKeyFromEvent = eventPublicKey ? await eventPublicKey : null;
-  if (publicKeyFromEvent) return publicKeyFromEvent;
-  return null;
+  // Race the connect event against polling getActivePublicKey: right after
+  // approval the extension can briefly report "Cannot get active account".
+  return firstPublicKey([
+    pollActivePublicKey(providers, 10, 500),
+    eventPublicKey ?? Promise.resolve(null),
+  ]);
 }
 
-/** Ask each provider for its active public key (Casper Wallet's getActivePublicKey). */
-async function readActivePublicKey(providers: CasperWalletLike[]): Promise<string | null> {
-  for (const provider of providers) {
-    if (!provider.getActivePublicKey) continue;
-    try {
-      const publicKey = normalizePublicKey(await provider.getActivePublicKey());
-      if (publicKey) return publicKey;
-    } catch {
-      // Provider may throw when locked or not yet approved — fall through.
+/** Resolve with the first non-null key; null once every source has come up empty. */
+function firstPublicKey(sources: Array<Promise<string | null>>): Promise<string | null> {
+  return new Promise((resolve) => {
+    let remaining = sources.length;
+    for (const source of sources) {
+      source
+        .then((publicKey) => {
+          if (publicKey) resolve(publicKey);
+          else if (--remaining === 0) resolve(null);
+        })
+        .catch(() => {
+          if (--remaining === 0) resolve(null);
+        });
+    }
+  });
+}
+
+/** Poll each provider's getActivePublicKey until one yields a key or attempts run out. */
+async function pollActivePublicKey(
+  providers: CasperWalletLike[],
+  attempts: number,
+  delayMs: number,
+): Promise<string | null> {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
+    for (const provider of providers) {
+      if (!provider.getActivePublicKey) continue;
+      try {
+        const publicKey = normalizePublicKey(await provider.getActivePublicKey());
+        if (publicKey) return publicKey;
+      } catch {
+        // Locked or account not yet active — retry on the next tick.
+      }
     }
   }
   return null;
