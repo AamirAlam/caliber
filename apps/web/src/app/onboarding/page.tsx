@@ -188,13 +188,12 @@ export default function OnboardingPage() {
         setWallet(await authenticateWallet(publicKey));
         return;
       }
-      if (walletPermissionConfirmed) {
-        setWalletError('Wallet is connected, but the extension did not expose an active public key. Paste the wallet public key to continue.');
-        return;
-      }
       const connectedPublicKey = await connectWalletProvider();
       setWalletPermissionConfirmed(true);
-      if (!connectedPublicKey) return;
+      if (!connectedPublicKey) {
+        setWalletError('Wallet is connected, but the extension did not expose an active public key. Unlock the wallet and try again, or paste the wallet public key to continue.');
+        return;
+      }
       setConnectedAddress(connectedPublicKey);
       setWallet(await authenticateWallet(connectedPublicKey));
     } catch (error) {

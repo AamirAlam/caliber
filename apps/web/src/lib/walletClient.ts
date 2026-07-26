@@ -5,6 +5,7 @@ interface CasperWalletLike {
   requestConnection?: () => Promise<unknown>;
   connect?: () => Promise<unknown>;
   isConnected?: () => Promise<boolean> | boolean;
+  getActivePublicKey?: () => Promise<unknown> | unknown;
   signMessage?: (publicKey: string, message: string) => Promise<unknown> | unknown;
   sign?: (message: string) => Promise<unknown> | unknown;
 }
@@ -43,8 +44,24 @@ export async function connectWalletProvider(): Promise<string | null> {
   if (publicKeyFromConnection) return publicKeyFromConnection;
   const connected = await readConnected(provider, connection);
   if (!connected) throw new Error('Wallet connection was not approved.');
+  const publicKeyFromProvider = await readActivePublicKey(providers);
+  if (publicKeyFromProvider) return publicKeyFromProvider;
   const publicKeyFromEvent = eventPublicKey ? await eventPublicKey : null;
   if (publicKeyFromEvent) return publicKeyFromEvent;
+  return null;
+}
+
+/** Ask each provider for its active public key (Casper Wallet's getActivePublicKey). */
+async function readActivePublicKey(providers: CasperWalletLike[]): Promise<string | null> {
+  for (const provider of providers) {
+    if (!provider.getActivePublicKey) continue;
+    try {
+      const publicKey = normalizePublicKey(await provider.getActivePublicKey());
+      if (publicKey) return publicKey;
+    } catch {
+      // Provider may throw when locked or not yet approved — fall through.
+    }
+  }
   return null;
 }
 
