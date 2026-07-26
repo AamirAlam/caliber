@@ -202,6 +202,53 @@ describe('service observability API', () => {
     expect(stopped.json()).toMatchObject({ id: 'workspace_1', agentStatus: 'stopped' });
   });
 
+  it('updates workspace policy for the owner wallet and rejects others', async () => {
+    const { app, audit } = await testServer();
+    await audit.saveWorkspace({
+      id: 'workspace_1',
+      name: 'RWA Income Treasury',
+      ownerAccount: 'owner-wallet',
+      vaultContractHash: 'contract-package-test',
+      network: 'casper-test',
+      policy: { rwaTarget: 60, stableTarget: 30, nativeTarget: 10, maxRiskScore: 70 },
+      signals: { mode: 'operator', feedUrl: '' },
+      agentStatus: 'stopped',
+      createdAt: '2026-07-20T00:00:00.000Z',
+      updatedAt: '2026-07-20T00:00:00.000Z',
+    });
+
+    const updated = await app.inject({
+      method: 'POST',
+      url: '/workspaces/workspace_1/policy',
+      payload: {
+        ownerAccount: 'owner-wallet',
+        policy: { rwaTarget: 50, stableTarget: 40, nativeTarget: 10, maxRiskScore: 60 },
+      },
+    });
+    expect(updated.statusCode).toBe(200);
+    expect(updated.json()).toMatchObject({ id: 'workspace_1', policy: { rwaTarget: 50, maxRiskScore: 60 } });
+
+    const forbidden = await app.inject({
+      method: 'POST',
+      url: '/workspaces/workspace_1/policy',
+      payload: {
+        ownerAccount: 'other-wallet',
+        policy: { rwaTarget: 50, stableTarget: 40, nativeTarget: 10, maxRiskScore: 60 },
+      },
+    });
+    expect(forbidden.statusCode).toBe(403);
+
+    const invalid = await app.inject({
+      method: 'POST',
+      url: '/workspaces/workspace_1/policy',
+      payload: {
+        ownerAccount: 'owner-wallet',
+        policy: { rwaTarget: 90, stableTarget: 40, nativeTarget: 10, maxRiskScore: 60 },
+      },
+    });
+    expect(invalid.statusCode).toBe(400);
+  });
+
   it('rejects invalid workspace payloads', async () => {
     const { app } = await testServer();
     const res = await app.inject({

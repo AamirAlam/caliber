@@ -23,7 +23,17 @@ import type { WalletSession } from '@/lib/walletAuth';
 const EXPLORER = process.env.NEXT_PUBLIC_EXPLORER_BASE ?? 'https://testnet.cspr.live';
 /** Fallback FUM (USD) shown when the feed carries no live `treasury.total.usd` signal. */
 const NOTIONAL_FUNDS_UNDER_MANAGEMENT_USD = 1_200_000;
+/** Mirrors the backend's CALIBER_WORKSPACE_RUN_INTERVAL_MS default. */
+const WORKSPACE_RUN_INTERVAL_MS = 10 * 60 * 1000;
 const HISTORY_PAGE_SIZE = 6;
+
+/** Mirrors the backend's riskBand thresholds so the gauge color matches the shown score. */
+function riskBand(score: number): RiskScore['band'] {
+  if (score < 25) return 'low';
+  if (score < 50) return 'moderate';
+  if (score < 75) return 'elevated';
+  return 'critical';
+}
 
 const BANDS = {
   low: { label: 'Low', color: '#059669', tint: 'text-signal-emerald' },
@@ -53,6 +63,15 @@ export default function DashboardPage() {
   const [walletPermissionConfirmed, setWalletPermissionConfirmed] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [agentStatusBusy, setAgentStatusBusy] = useState(false);
+  const [runNowBusy, setRunNowBusy] = useState(false);
+  const [policyDraft, setPolicyDraft] = useState<{
+    rwaTarget: number;
+    stableTarget: number;
+    nativeTarget: number;
+    maxRiskScore: number;
+  } | null>(null);
+  const [policyBusy, setPolicyBusy] = useState(false);
+  const [policyError, setPolicyError] = useState<string | null>(null);
   const [showRunHistory, setShowRunHistory] = useState(false);
   const [historyOpenId, setHistoryOpenId] = useState<string | null>(null);
   const [historyDetail, setHistoryDetail] = useState<RunDetail | null>(null);
@@ -220,8 +239,8 @@ export default function DashboardPage() {
       const approval = await signApproval(runId, workspace.id, wallet);
       const res = await api.approve(runId, workspace.id, approval);
       setDeployHash(res.tx.deployHash ?? null);
-      await refresh();
-      const runs = (await api.getRuns(workspace.id)) ?? [];
+      const [, runsRes] = await Promise.all([refresh(), api.getRuns(workspace.id)]);
+      const runs = runsRes ?? [];
       setWorkspaceRuns(runs);
       const latest = runs[0];
       const detail = latest ? await api.getRun(latest.id) : null;
@@ -230,6 +249,40 @@ export default function DashboardPage() {
       setError(String(e));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const onRunNow = async () => {
+    if (!workspace) return;
+    setRunNowBusy(true);
+    setError(null);
+    try {
+      await api.runNow(workspace.id);
+      const runs = (await api.getRuns(workspace.id)) ?? [];
+      setWorkspaceRuns(runs);
+      const latest = runs[0];
+      const detail = latest ? await api.getRun(latest.id) : null;
+      setWorkspaceRecommendation(detail?.recommendation ?? null);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setRunNowBusy(false);
+    }
+  };
+
+  const onSavePolicy = async () => {
+    if (!workspace || !policyDraft || !ownerAccount) return;
+    setPolicyBusy(true);
+    setPolicyError(null);
+    try {
+      const updated = await api.updateWorkspacePolicy(workspace.id, policyDraft, ownerAccount);
+      activateWorkspace(updated);
+      setWorkspace(updated);
+      setPolicyDraft(null);
+    } catch (e) {
+      setPolicyError(String(e));
+    } finally {
+      setPolicyBusy(false);
     }
   };
 
@@ -272,6 +325,10 @@ export default function DashboardPage() {
 
   const walletOwnsWorkspace = workspace.ownerAccount === ownerAccount;
   const agentActive = workspace.agentStatus === 'active';
+  const lastRunAt = workspaceRuns[0] ? Date.parse(workspaceRuns[0].startedAt) : null;
+  const nextRunInMin = lastRunAt
+    ? Math.max(0, Math.ceil((lastRunAt + WORKSPACE_RUN_INTERVAL_MS - Date.now()) / 60_000))
+    : null;
   const latestWorkspaceRun = workspaceRuns[0] ?? null;
   const currentDecision = workspaceRecommendation;
   const hasWorkspaceAnalysis = Boolean(latestWorkspaceRun);
@@ -457,7 +514,7 @@ export default function DashboardPage() {
               </div>
               <div className="px-5 pb-5 sm:p-5 sm:pl-0">
                 {currentDecision ? (
-                  <RiskGauge score={currentDecision.riskScore} band={risk?.band ?? 'low'} />
+                  <RiskGauge score={currentDecision.riskScore} band={riskBand(currentDecision.riskScore)} />
                 ) : (
                   <EmptyRunMark />
                 )}
@@ -561,18 +618,91 @@ export default function DashboardPage() {
                   </div>
                 </div>
               </div>
-              <div className="rounded-lg bg-slate-50 px-3 py-2 text-right">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Single move cap</p>
-                <p className="tnum mt-0.5 text-lg font-semibold text-ink-900">
-                  {(policy.constraints.maxSingleRebalancePct * 100).toFixed(0)}%
-                </p>
+              <div className="flex flex-col items-end gap-2">
+                <div className="rounded-lg bg-slate-50 px-3 py-2 text-right">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Single move cap</p>
+                  <p className="tnum mt-0.5 text-lg font-semibold text-ink-900">
+                    {(policy.constraints.maxSingleRebalancePct * 100).toFixed(0)}%
+                  </p>
+                </div>
+                {walletOwnsWorkspace && !policyDraft && (
+                  <button
+                    onClick={() => setPolicyDraft({ ...workspace.policy })}
+                    className="btn-ghost text-sm"
+                  >
+                    Edit guardrails
+                  </button>
+                )}
               </div>
             </div>
-            <div className="mt-5 grid gap-3">
-              <AllocationGuardrail label="RWA target" value={workspace.policy.rwaTarget} />
-              <AllocationGuardrail label="Stable buffer" value={workspace.policy.stableTarget} />
-              <AllocationGuardrail label="Native CSPR" value={workspace.policy.nativeTarget} />
-            </div>
+            {policyDraft ? (
+              <div className="mt-5 grid gap-3">
+                {(
+                  [
+                    ['RWA target', 'rwaTarget'],
+                    ['Stable buffer', 'stableTarget'],
+                    ['Native CSPR', 'nativeTarget'],
+                    ['Risk ceiling', 'maxRiskScore'],
+                  ] as const
+                ).map(([label, key]) => (
+                  <label key={key} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+                    <span className="font-medium text-ink-900">{label}</span>
+                    <span className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={policyDraft[key]}
+                        onChange={(e) => setPolicyDraft({ ...policyDraft, [key]: Number(e.target.value) })}
+                        className="w-20 rounded-lg border border-slate-900/[0.1] bg-white px-2 py-1 text-right tnum"
+                      />
+                      <span className="text-xs text-slate-500">{key === 'maxRiskScore' ? '/100' : '%'}</span>
+                    </span>
+                  </label>
+                ))}
+                {(() => {
+                  const total = policyDraft.rwaTarget + policyDraft.stableTarget + policyDraft.nativeTarget;
+                  const valid = total === 100;
+                  return (
+                    <>
+                      <p className={`text-xs font-medium ${valid ? 'text-signal-emerald' : 'text-signal-rose'}`}>
+                        Allocations total {total}%{valid ? '' : ' — must equal 100%'}
+                      </p>
+                      {policyError && (
+                        <p className="rounded-lg border border-signal-rose/20 bg-rose-50 px-3 py-2 text-sm text-signal-rose">
+                          {policyError}
+                        </p>
+                      )}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => void onSavePolicy()}
+                          disabled={!valid || policyBusy}
+                          className="btn-primary flex-1 disabled:opacity-40"
+                        >
+                          {policyBusy ? 'Saving…' : 'Save guardrails'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setPolicyDraft(null);
+                            setPolicyError(null);
+                          }}
+                          disabled={policyBusy}
+                          className="btn-ghost flex-1 disabled:opacity-40"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="mt-5 grid gap-3">
+                <AllocationGuardrail label="RWA target" value={workspace.policy.rwaTarget} />
+                <AllocationGuardrail label="Stable buffer" value={workspace.policy.stableTarget} />
+                <AllocationGuardrail label="Native CSPR" value={workspace.policy.nativeTarget} />
+              </div>
+            )}
           </section>
         </div>
 
@@ -625,9 +755,20 @@ export default function DashboardPage() {
                 <p className="mt-1 text-xs leading-relaxed text-slate-500">
                   {currentDecision
                     ? 'The latest decision does not require an on-chain approval.'
-                    : 'The backend checks active workspaces every minute and runs this workspace after its 10-minute interval has elapsed.'}
+                    : nextRunInMin !== null
+                      ? `Next scheduled analysis in about ${nextRunInMin} min. Run one now if you don't want to wait.`
+                      : 'The first analysis will run shortly. Run one now if you don\'t want to wait.'}
                 </p>
               </div>
+            )}
+            {agentActive && !canApprove && walletOwnsWorkspace && (
+              <button
+                onClick={() => void onRunNow()}
+                disabled={runNowBusy}
+                className="btn-primary mt-3 w-full shadow-pop disabled:opacity-40"
+              >
+                {runNowBusy ? 'Running analysis…' : 'Run analysis now'}
+              </button>
             )}
             {agentActive && !canApprove && (
               <button

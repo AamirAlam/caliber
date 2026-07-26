@@ -34,7 +34,11 @@
     "minLiquidityBufferPct": 0.2,
     "maxRiskScore": 70,
     "requireHumanApproval": true,
-    "allowedCounterparties": []
+    "allowedCounterparties": [
+      "tbill-rwa",
+      "usdc",
+      "cspr"
+    ]
   },
   "paused": false,
   "updatedAt": "2026-07-25T00:00:00.000Z"

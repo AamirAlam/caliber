@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import cors from '@fastify/cors';
-import { CreateTreasuryWorkspaceSchema, WalletApprovalSchema, type TreasuryWorkspace } from '@caliber/shared';
+import {
+  CreateTreasuryWorkspaceSchema,
+  UpdateWorkspacePolicySchema,
+  WalletApprovalSchema,
+  type TreasuryWorkspace,
+} from '@caliber/shared';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import casper from 'casper-js-sdk';
 import { config } from '../config.js';
@@ -233,6 +238,28 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
     },
   );
 
+  app.post<{ Params: { id: string }; Body: { policy?: unknown; ownerAccount?: string } }>(
+    '/workspaces/:id/policy',
+    async (req, reply) => {
+      const workspace = await audit.getWorkspace(req.params.id);
+      if (!workspace) return reply.code(404).send({ error: 'workspace not found' });
+      if (req.body?.ownerAccount && !ownsWorkspace(workspace, req.body.ownerAccount)) {
+        return reply.code(403).send({ error: 'wallet does not own this workspace' });
+      }
+      const parsed = UpdateWorkspacePolicySchema.safeParse(req.body?.policy ?? {});
+      if (!parsed.success) {
+        return reply.code(400).send({ error: parsed.error.message });
+      }
+      const updated: TreasuryWorkspace = {
+        ...workspace,
+        policy: parsed.data,
+        updatedAt: new Date().toISOString(),
+      };
+      await audit.saveWorkspace(updated);
+      return updated;
+    },
+  );
+
   app.get('/signals/latest', async (_req, reply) =>
     state.latestSnapshot ?? reply.code(404).send({ error: 'no snapshot yet' }),
   );
@@ -263,14 +290,18 @@ export function buildServer(deps: OrchestratorDeps, scheduler: Scheduler): Fasti
 
   app.get('/vault/state', async () => readVaultStateCached());
 
-  app.post<{ Body: { workspaceId?: string } }>('/runs', async (req, reply) => {
+  app.post<{ Body: { workspaceId?: string; ownerAccount?: string } }>('/runs', async (req, reply) => {
     if (!authorize(req, reply)) return reply;
     const workspaceId = req.body?.workspaceId;
     if (!workspaceId) {
       return reply.code(400).send({ error: 'workspaceId required' });
     }
-    if (!(await audit.getWorkspace(workspaceId))) {
+    const workspace = await audit.getWorkspace(workspaceId);
+    if (!workspace) {
       return reply.code(404).send({ error: 'workspace not found' });
+    }
+    if (req.body?.ownerAccount && !ownsWorkspace(workspace, req.body.ownerAccount)) {
+      return reply.code(403).send({ error: 'wallet does not own this workspace' });
     }
     await scheduler.runNow({ workspaceId });
     return {

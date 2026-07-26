@@ -7,6 +7,7 @@ import type {
   TreasuryWorkspace,
   TransactionRecord,
   TreasuryPolicy,
+  UpdateWorkspacePolicy,
   WalletApproval,
 } from '@caliber/shared';
 
@@ -68,7 +69,6 @@ export const api = {
   getPolicy: () => get<TreasuryPolicy>('/policy'),
   getLatestSignals: () => get<SignalSnapshot>('/signals/latest'),
   getLatestRisk: () => get<RiskScore>('/risk/latest'),
-  getLatestRecommendation: () => get<Recommendation>('/recommendation/latest'),
   getRuns: (workspaceId?: string) =>
     get<AgentRunLog[]>(workspaceId ? `/runs?workspaceId=${encodeURIComponent(workspaceId)}` : '/runs'),
   getRun: (id: string) => get<RunDetail>(`/runs/${id}`),
@@ -83,6 +83,8 @@ export const api = {
     post<TreasuryWorkspace>('/workspaces', workspace),
   setWorkspaceAgentStatus: (id: string, status: 'active' | 'stopped', ownerAccount?: string) =>
     post<TreasuryWorkspace>(`/workspaces/${id}/agent`, { status, ownerAccount }),
+  updateWorkspacePolicy: (id: string, policy: UpdateWorkspacePolicy, ownerAccount?: string) =>
+    post<TreasuryWorkspace>(`/workspaces/${id}/policy`, { policy, ownerAccount }),
   runNow: (workspaceId?: string) =>
     post<{
       snapshot: SignalSnapshot | null;

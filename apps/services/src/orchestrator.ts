@@ -5,14 +5,17 @@ import { readVaultStateCached } from './casper/reader.js';
 import { formatMemory, summarizeHistory } from './memory.js';
 import type { AuditStore } from './audit/index.js';
 import { evaluatePolicy } from './policy/index.js';
-import { CasperExecutor } from './execution/index.js';
+import { CasperExecutor, decisionContentHash } from './execution/index.js';
 import { log } from './logger.js';
 import { scoreRisk } from './policy/index.js';
 import { buildSignalSources, collectSignals, type SignalSource } from './signals/index.js';
 import type { AppState } from './state.js';
 
 export interface RebalanceExecutor {
-  submit(request: Parameters<CasperExecutor['submit']>[0]): Promise<TransactionRecord>;
+  submit(
+    request: Parameters<CasperExecutor['submit']>[0],
+    contentHash?: Parameters<CasperExecutor['submit']>[1],
+  ): Promise<TransactionRecord>;
   waitForFinalization(hash: string): Promise<'pending' | 'finalized' | 'failed'>;
 }
 
@@ -181,7 +184,12 @@ export async function executeApproved(
   run.stage = 'execute';
   await audit.saveRun(run);
 
-  const tx = await deps.executor.submit(pending.rebalance);
+  const contentHash = decisionContentHash(pending.rebalance, {
+    policyId: (pending.policy ?? state.activePolicy).id,
+    snapshotId: pending.snapshot.id,
+    riskScore: pending.risk.score,
+  });
+  const tx = await deps.executor.submit(pending.rebalance, contentHash);
   await audit.saveTransaction(tx);
 
   run.stage = 'done';
@@ -243,6 +251,11 @@ function policyFromWorkspace(workspace: TreasuryWorkspace, base: TreasuryPolicy)
       ...base.constraints,
       minLiquidityBufferPct: pct.stablecoin,
       maxRiskScore: workspace.policy.maxRiskScore,
+      // Never run with an open counterparty list: fall back to the policy's own assets.
+      allowedCounterparties:
+        base.constraints.allowedCounterparties.length > 0
+          ? base.constraints.allowedCounterparties
+          : base.allocations.map((allocation) => allocation.assetId),
     },
   };
 }

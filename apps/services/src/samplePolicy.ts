@@ -37,7 +37,7 @@ export const samplePolicy: TreasuryPolicy = {
     minLiquidityBufferPct: 0.2,
     maxRiskScore: 70,
     requireHumanApproval: true,
-    allowedCounterparties: [],
+    allowedCounterparties: ['tbill-rwa', 'usdc', 'cspr'],
   },
   paused: false,
   updatedAt: new Date().toISOString(),
