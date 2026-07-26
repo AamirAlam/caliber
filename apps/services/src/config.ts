@@ -105,14 +105,15 @@ function dbConfig(env: NodeJS.ProcessEnv): CaliberConfig['db'] {
 /**
  * LLM provider config — model-agnostic. The provider selects the key env var and
  * a sensible default model; both are overridable via env.
- * - `anthropic` (default): key `ANTHROPIC_API_KEY`, model `claude-opus-4-8`.
+ * - `anthropic` (default): key `ANTHROPIC_API_KEY`, model `claude-haiku-4-5`
+ *   (cheapest Anthropic model — $1/$5 per MTok; override via CALIBER_DECISION_MODEL).
  * - `openrouter`: key `OPENROUTER_API_KEY`, model `openai/gpt-4o-mini` — one key
  *   across many providers, with provider-level fallbacks for resilience.
  */
 function aiConfig(env: NodeJS.ProcessEnv): CaliberConfig['ai'] {
   const provider = env.CALIBER_LLM_PROVIDER ?? 'anthropic';
   const defaults: Record<string, { model: string; keyEnv: string }> = {
-    anthropic: { model: 'claude-opus-4-8', keyEnv: 'ANTHROPIC_API_KEY' },
+    anthropic: { model: 'claude-haiku-4-5', keyEnv: 'ANTHROPIC_API_KEY' },
     openrouter: { model: 'openai/gpt-4o-mini', keyEnv: 'OPENROUTER_API_KEY' },
   };
   const d = defaults[provider] ?? defaults.anthropic!;

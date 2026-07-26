@@ -63,7 +63,6 @@ export default function DashboardPage() {
   const [walletPermissionConfirmed, setWalletPermissionConfirmed] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
   const [agentStatusBusy, setAgentStatusBusy] = useState(false);
-  const [runNowBusy, setRunNowBusy] = useState(false);
   const [policyDraft, setPolicyDraft] = useState<{
     rwaTarget: number;
     stableTarget: number;
@@ -260,24 +259,6 @@ export default function DashboardPage() {
       setError(String(e));
     } finally {
       setBusy(false);
-    }
-  };
-
-  const onRunNow = async () => {
-    if (!workspace) return;
-    setRunNowBusy(true);
-    setError(null);
-    try {
-      await api.runNow(workspace.id);
-      const runs = (await api.getRuns(workspace.id)) ?? [];
-      setWorkspaceRuns(runs);
-      const latest = runs[0];
-      const detail = latest ? await api.getRun(latest.id) : null;
-      setWorkspaceRecommendation(detail?.recommendation ?? null);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setRunNowBusy(false);
     }
   };
 
@@ -770,19 +751,10 @@ export default function DashboardPage() {
                   {currentDecision
                     ? 'The latest decision does not require an on-chain approval.'
                     : nextRunInMin !== null
-                      ? `Next scheduled analysis in about ${nextRunInMin} min. Run one now if you don't want to wait.`
-                      : 'The first analysis will run shortly. Run one now if you don\'t want to wait.'}
+                      ? `Next scheduled analysis in about ${nextRunInMin} min.`
+                      : 'The first analysis will run shortly.'}
                 </p>
               </div>
-            )}
-            {agentActive && !canApprove && walletOwnsWorkspace && (
-              <button
-                onClick={() => void onRunNow()}
-                disabled={runNowBusy}
-                className="btn-primary mt-3 w-full shadow-pop disabled:opacity-40"
-              >
-                {runNowBusy ? 'Running analysis…' : 'Run analysis now'}
-              </button>
             )}
             {agentActive && !canApprove && (
               <button
