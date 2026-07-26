@@ -6,6 +6,7 @@ interface CasperWalletLike {
   connect?: () => Promise<unknown>;
   isConnected?: () => Promise<boolean> | boolean;
   getActivePublicKey?: () => Promise<unknown> | unknown;
+  requestSwitchAccount?: () => Promise<unknown>;
   signMessage?: (publicKey: string, message: string) => Promise<unknown> | unknown;
   sign?: (message: string) => Promise<unknown> | unknown;
 }
@@ -44,8 +45,20 @@ export async function connectWalletProvider(): Promise<string | null> {
   if (publicKeyFromConnection) return publicKeyFromConnection;
   const connected = await readConnected(provider, connection);
   if (!connected) throw new Error('Wallet connection was not approved.');
-  // Race the connect event against polling getActivePublicKey: right after
-  // approval the extension can briefly report "Cannot get active account".
+  const publicKeyFromProvider = await pollActivePublicKey(providers, 2, 300);
+  if (publicKeyFromProvider) return publicKeyFromProvider;
+  // getActivePublicKey throws "Cannot get active account" when the wallet is
+  // locked or when the wallet's active account is not the one approved for this
+  // site. requestSwitchAccount opens the wallet UI so the user can activate an
+  // approved account; the ActiveKeyChanged/Unlocked events then carry the key.
+  const switcher = providers.find((item) => item.requestSwitchAccount);
+  if (switcher?.requestSwitchAccount) {
+    try {
+      await switcher.requestSwitchAccount();
+    } catch {
+      // User dismissed the switch UI — fall through to the event/poll race.
+    }
+  }
   return firstPublicKey([
     pollActivePublicKey(providers, 10, 500),
     eventPublicKey ?? Promise.resolve(null),
@@ -223,6 +236,8 @@ function walletEventTargets(): EventTarget[] {
 
 const walletEventNames = [
   'casper-wallet:connected',
+  'casper-wallet:unlocked',
+  'casper-wallet:tabChanged',
   'casper-wallet:activeKeyChanged',
   'casper-wallet:active-key-changed',
   'casper-wallet:accountChanged',
